@@ -2,189 +2,168 @@ package main
 
 import (
 	"fmt"
-	"regexp"
+	"golang.org/x/crypto/ssh"
+	"time"
+	"net"
+	"strings"
 )
 
-type TEST struct {
-	Message string
+
+type SSHSession struct {
+	session     *ssh.Session
+	in          chan string
+	out         chan string
 }
 
-func (t TEST) Say() {
-	fmt.Println(t.Message)
+func NewSSHSession(user, password, ipPort string) (*SSHSession, error) {
+	sshSession := new(SSHSession)
+	if err := sshSession.createConnection(user, password, ipPort); err != nil {
+		return nil, err
+	}
+	if err := sshSession.muxShell(); err != nil {
+		return nil, err
+	}
+	if err := sshSession.start(); err != nil {
+		return nil, err
+	}
+	return sshSession, nil
 }
 
-func (t TEST) Update(m string) {
-	t.Message = m
+
+
+
+func (this *SSHSession) muxShell() error {
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,     // disable echoing
+		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+	}
+	if err := this.session.RequestPty("vt100", 80, 40, modes); err != nil {
+		return err
+	}
+	w, err := this.session.StdinPipe()
+	if err != nil {
+		return err
+	}
+	r, err := this.session.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	in := make(chan string, 0)
+	out := make(chan string, 0)
+	go func() {
+		for cmd := range in {
+			w.Write([]byte(cmd + "\n"))
+		}
+	}()
+
+	go func() {
+		var (
+			buf [65 * 1024]byte
+			t   int
+		)
+		for {
+			n, err := r.Read(buf[t:])
+			if err != nil {
+				return
+			}
+			t += n
+			out <- string(buf[:t])
+			t = 0
+		}
+	}()
+	this.in = in
+	this.out = out
+	return nil
 }
 
-func (t *TEST) SayP() {
-	fmt.Println(t.Message)
+func (this *SSHSession) start() error {
+	if err := this.session.Shell(); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (t *TEST) UpdateP(m string) {
-	t.Message = m
+
+func (this *SSHSession) createConnection(user, password, ipPort string) error {
+
+	client, err := ssh.Dial("tcp", ipPort, &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return nil
+		},
+		Config: ssh.Config{
+			Ciphers: []string{"aes128-cbc"},
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	this.session = session
+	return nil
 }
 
-func ParseSoftVersion_HUAWEI(v string) {
-	re_v, _ := regexp.Compile(`V(\d+)R(\d+)C(\d+)SPC(\d+)`)
-	re_p, _ := regexp.Compile(`V(\d+)R(\d+)SPH(\d+)`)
-	ver  := re_v.FindStringSubmatch(v)
-	path := re_p.FindStringSubmatch(v)
-	fmt.Println(ver[1:], path[1:])
+func (this *SSHSession) WriteChannel(cmds ...string) {
+	for _, cmd := range cmds {
+		this.in <- cmd
+	}
+}
+
+func (this *SSHSession) ReadChannelExpect(maxIntervalTime float32, expects ...string) string {
+	result := ""
+	isDelay := false
+ExitLoop:
+	for {
+		select {
+		case sout := <-this.out:
+			isDelay = false
+			result = result + sout
+			for _, expect := range expects {
+				if strings.Contains(sout, expect) {
+					break ExitLoop
+				}
+			}
+		default:
+			//如果已经延迟过了，则直接返回
+			if isDelay {
+				break ExitLoop
+			}
+			time.Sleep(time.Duration(maxIntervalTime) * time.Second)
+			isDelay = true
+		}
+	}
+	return result
+}
+
+
+func foo() (ok bool, err string){
+	return true, "Error"
 }
 
 func main() {
+	host := "172.28.1.1"
+	port := "22"
+	username := ""
+	pass := ""
 
-	ver_string := `Huawei Versatile Routing Platform Software
-VRP (R) software, Version 8.150 (CE12800 V200R002C50SPC800)
-Copyright (C) 2012-2017 Huawei Technologies Co., Ltd.
-HUAWEI CE12804 uptime is 281 days, 5 hours, 42 minutes 
-Patch Version: V200R002SPH010
+	d, err:= NewSSHSession(username, pass, host+":"+port)
+	if err != nil{
+		fmt.Println(err)
+	}
 
-BKP  version information:
-1.PCB      Version  : DE01BAK04A VER C
-2.Board    Type     : CE-BAK04A  
-3.MPU Slot Quantity : 2
-4.LPU Slot Quantity : 4
-5.SFU Slot Quantity : 6
+	d.in <- "display version\n"
 
-MPU(Master) 5 : uptime is  281 days, 5 hours, 41 minutes
-        StartupTime 2017/09/20   01:46:14+08:00 
-Memory     Size     : 8192 M bytes
-Flash      Size     : 4096 M bytes
-NVRAM      Size     : 512 K bytes
-MPU version information:                              
-1.PCB      Version  : DE01MPUA VER C
-2.MAB      Version  : 1 
-3.Board    Type     : CE-MPUA
-4.CPLD1    Version  : 104
-5.BIOS     Version  : 386
-                
-MPU(Slave) 6 : uptime is  281 days, 5 hours, 41 minutes
-        StartupTime 2017/09/20   01:46:20+08:00 
-Memory     Size     : 8192 M bytes
-Flash      Size     : 4096 M bytes
-NVRAM      Size     : 512 K bytes
-MPU version information:                              
-1.PCB      Version  : DE01MPUA VER C
-2.MAB      Version  : 1 
-3.Board    Type     : CE-MPUA
-4.CPLD1    Version  : 104
-5.BIOS     Version  : 386
-                
-LPU 1 : uptime is 281 days, 5 hours, 32 minutes
-        StartupTime 2017/09/20   01:55:39+08:00 
-Memory     Size     : 4096 M bytes
-Flash      Size     : 128  M bytes
-LPU version information:
-1.PCB      Version  : CEL36LQFD VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-L36LQ-FD
-4.CPLD1    Version  : 104
-5.CPLD2    Version  : 104
-6.BIOS     Version  : 105
-                
-LPU 2 : uptime is 281 days, 5 hours, 31 minutes
-        StartupTime 2017/09/20   01:56:29+08:00 
-Memory     Size     : 4096 M bytes
-Flash      Size     : 128  M bytes
-LPU version information:
-1.PCB      Version  : CEL36LQFD VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-L36LQ-FD
-4.CPLD1    Version  : 104
-5.CPLD2    Version  : 104
-6.BIOS     Version  : 105
+	fmt.Print(<-d.out)
+	fmt.Print(<-d.out)
 
-LPU 3 : uptime is 281 days, 5 hours, 31 minutes
-        StartupTime 2017/09/20   01:56:45+08:00 
-Memory     Size     : 4096 M bytes
-Flash      Size     : 128  M bytes
-LPU version information:
-1.PCB      Version  : CEL36LQFD VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-L36LQ-FD
-4.CPLD1    Version  : 104
-5.CPLD2    Version  : 104
-6.BIOS     Version  : 105
 
-LPU 4 : uptime is 281 days, 5 hours, 32 minutes
-        StartupTime 2017/09/20   01:55:36+08:00 
-Memory     Size     : 4096 M bytes
-Flash      Size     : 128  M bytes
-LPU version information:
-1.PCB      Version  : CEL36LQFD VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-L36LQ-FD
-4.CPLD1    Version  : 104
-5.CPLD2    Version  : 104
-6.BIOS     Version  : 105
-
-SFU 9 : uptime is 281 days, 5 hours, 33 minutes
-        StartupTime 2017/09/20   01:54:23+08:00 
-Memory     Size     : 512 M bytes
-Flash      Size     : 64  M bytes
-SFU version information:
-1.PCB      Version  : CESFU04G VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-SFU04G
-4.CPLD1    Version  : 101
-5.BIOS     Version  : 386
-
-SFU 10 : uptime is 281 days, 5 hours, 33 minutes
-        StartupTime 2017/09/20   01:54:23+08:00 
-Memory     Size     : 512 M bytes
-Flash      Size     : 64  M bytes
-SFU version information:
-1.PCB      Version  : CESFU04G VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-SFU04G
-4.CPLD1    Version  : 101
-5.BIOS     Version  : 386
-
-SFU 11 : uptime is 281 days, 5 hours, 33 minutes
-        StartupTime 2017/09/20   01:54:24+08:00 
-Memory     Size     : 512 M bytes
-Flash      Size     : 64  M bytes
-SFU version information:
-1.PCB      Version  : CESFU04G VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-SFU04G
-4.CPLD1    Version  : 101
-5.BIOS     Version  : 386
-                
-SFU 12 : uptime is 281 days, 5 hours, 33 minutes
-        StartupTime 2017/09/20   01:54:23+08:00 
-Memory     Size     : 512 M bytes
-Flash      Size     : 64  M bytes
-SFU version information:
-1.PCB      Version  : CESFU04G VER A
-2.MAB      Version  : 1
-3.Board    Type     : CE-SFU04G
-4.CPLD1    Version  : 101
-5.BIOS     Version  : 386
-
-CMU(Slave) 7 : uptime is 279 days, 21 hours, 57 minutes
-        StartupTime 2017/09/20   02:01:35+08:00
-Memory     Size     : 128 M bytes
-Flash      Size     : 32  M bytes
-CMU version information:
-1.PCB      Version  : DE01CMUA VER B
-2.MAB      Version  : 1 
-3.Board    Type     : CE-CMUA
-4.CPLD1    Version  : 104
-5.BIOS     Version  : 127
-
-CMU(Master) 8 : uptime is 279 days, 13 hours, 46 minutes
-        StartupTime 2017/09/20   01:58:06+08:00
-Memory     Size     : 128 M bytes
-Flash      Size     : 32  M bytes
-CMU version information:
-1.PCB      Version  : DE01CMUA VER B
-2.MAB      Version  : 1 
-3.Board    Type     : CE-CMUA
-4.CPLD1    Version  : 104
-5.BIOS     Version  : 127`
-
-ParseSoftVersion_HUAWEI(ver_string)
 }
