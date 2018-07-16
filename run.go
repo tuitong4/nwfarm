@@ -8,114 +8,47 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
+	"syscall"
 )
 
-var VENDOR_FLAG map[string]string = map[string]string{
-	"H3C":    "h3c",
-	"HUAWEI": "huawei",
-	"NEXUS":  "nexus",
-	"CISCO":  "cisco",
-	"RUIJIE": "ruijie"}
-
-func LogAndRun(host string) {
-	port := "22"
-	vendor := ""
-	username := ""
-	pass := ""
-	config := &ssh.ClientConfig{
-		User: username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(pass),
-		},
-		Timeout:         30 * time.Second,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-		BannerCallback: func(banner string) error {
-			lowerbanner := strings.ToLower(banner)
-			for k, v := range VENDOR_FLAG {
-				matched, _ := regexp.MatchString(v, lowerbanner)
-				if matched {
-					vendor = k
-					return nil
-				}
-			}
-			return nil
-		},
-	}
-	config.Config.Ciphers = append(config.Config.Ciphers, "aes128-cbc")
-
-	var cmd string
-	if vendor == "H3C" || vendor == "HUAWEI" {
-		cmd = "display version"
-	} else {
-		cmd = "show version"
-	}
-
-	client, err := ssh.Dial("tcp", host+":"+port, config)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer client.Close()
-
-	sess, err := client.NewSession()
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer sess.Close()
-
-	sess.Stdout = os.Stdout
-	sess.Stderr = os.Stderr
-	err = sess.Run(cmd)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-type SSHBaseInterface interface {
-	Connect()
-	Close()
-	SendCmd()
-	SendCmdExpect()
-	SendCmdTiminig()
-}
+const MAX_BUFFER = 1024 * 10
 
 type SSHBase struct {
-	host           string
-	port           string
-	sshconfig      ssh.ClientConfig
-	sessiontimeout time.Duration
-	client         ssh.Client
-	session        ssh.Session
-	ReturnChar     string
-	termheight     int
-	termwidth      int
-	termtype       string
-	alive          bool
-	InChannel      io.WriteCloser
-	OutChannel     io.Reader
-	ErrChannel     io.Reader
-	send           chan string
+	host        string
+	port        string
+	sshconfig   *ssh.ClientConfig
+	client      *ssh.Client
+	session     *ssh.Session
+	termheight  int
+	termwidth   int
+	termtype    string
+	alive       bool
+	InChannel   io.WriteCloser
+	OutChannel  io.Reader
+	respchan    chan string
+	readwaittime time.Duration
 }
 
 type SSHOptions struct {
 	PrivateKeyFile string
-	DefaultEnter   string // Character(s) to send to correspond to enter key (default: '\n').
-	ResponeReturn  string //Character(s) to use in normalized return data to represent enter key (default: '\n').
-	SessionTimeout time.Duration
 	IgnorHostKey   bool
 	BannerCallback ssh.BannerCallback
+	TermType       string
+	TermHeight     int
+	TermWidht      int
+	ReadWaitTime    time.Duration //Read data from a ssh channel timeout
 }
 
 func SSH(host, port, username, password string, timeout time.Duration, sshopts SSHOptions) (*SSHBase, error) {
 
 	config := &ssh.ClientConfig{
 		User:    username,
-		Timeout: timeout,
+		Timeout: timeout * time.Second, //time.duration should be lager than 1 second.
 		Auth: []ssh.AuthMethod{
 			ssh.Password(password),
 		},
@@ -124,7 +57,7 @@ func SSH(host, port, username, password string, timeout time.Duration, sshopts S
 
 	config.Config.Ciphers = append(config.Config.Ciphers, "aes128-cbc")
 
-	if !sshopts.PrivateKeyFile {
+	if sshopts.PrivateKeyFile != "" {
 
 		key, err := ioutil.ReadFile(sshopts.PrivateKeyFile)
 		signer, err := ssh.ParsePrivateKey(key)
@@ -145,7 +78,16 @@ func SSH(host, port, username, password string, timeout time.Duration, sshopts S
 		config.HostKeyCallback = ssh.FixedHostKey(getHostKey(host))
 	}
 
-	return &SSHBase{sshconfig: config, sessiontimeout: sshopts.SessionTimeout}, nil
+	ssh_client := &SSHBase{
+		host:        host,
+		port:        port,
+		sshconfig:   config,
+		termheight:  sshopts.TermHeight,
+		termwidth:   sshopts.TermWidht,
+		termtype:    sshopts.TermType,
+		readwaittime: sshopts.ReadWaitTime,
+	}
+	return ssh_client, nil
 }
 
 func getHostKey(host string) ssh.PublicKey {
@@ -184,13 +126,12 @@ func (s *SSHBase) Connect() error {
 	if s.alive {
 		log.Fatalf("SSH Connection is opened.")
 	}
-
 	client, err := ssh.Dial("tcp", s.host+":"+s.port, s.sshconfig)
 	if err != nil {
 		log.Fatalf("Unable to connect to remote host: %v", err)
 		return err
 	}
-	defer client.Close()
+	//defer client.Close()
 
 	sess, err := client.NewSession()
 
@@ -198,76 +139,316 @@ func (s *SSHBase) Connect() error {
 		log.Fatalf("Failed to create a session: %v", err)
 		return err
 	}
-	defer sess.Close()
+	//defer sess.Close()
 
-	term_mode := ssh.TerminalModes{
-		ssh.ECHO:          0,     // disable echoing
-		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
-		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
-	}
+	s.session = sess
 
-	err := sess.RequestPty(s.termtype, s.termheight, s.termwidth, term_mode)
+	err = s.invokeShell()
 	if err != nil {
-		log.Fatalf("Failed to init a pseudo terminal: %v", err)
-		return err
-	}
-
-	stdin, err := sess.StdinPipe()
-	if err != nil {
-		log.Fatalf("Failed to init input stream: %v", err)
-		return err
-	}
-
-	stdout, err := sess.StdoutPipe()
-	if err != nil {
-		log.Fatalf("Failed to init output stream: %v", err)
-		return err
-	}
-
-	stderr, err := sess.StderrPipe()
-	if err != nil {
-		log.Fatalf("Failed to init error stream: %v", err)
-		return err
-	}
-
-	err := sess.Shell()
-	if err != nil {
-		log.Fatalf("Failed to init remote shell: %v", err)
+		log.Fatalf("Failed to create a shell: %v", err)
 		return err
 	}
 
 	s.alive = true
-	s.InChannel = stdin
-	s.OutChannel = stdout
-	s.ErrChannel = stderr
-	s.session = sess
 	s.client = client
 
 	return nil
 }
 
-func (s *SSHBase) Close() {
-	if !s.alive {
-		return nil
+func (s *SSHBase) invokeShell() error {
+
+	term_mode := ssh.TerminalModes{
+		ssh.ECHO:          0,     // disable echoing
+		ssh.TTY_OP_ISPEED: 14400, // input speed = 38.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // output speed = 38.4kbaud
 	}
 
-	s.session.Close()
-	s.client.Close()
-}
-func (s *SSHBase) readRespone() (string, error) {
+	err := s.session.RequestPty(s.termtype, s.termheight, s.termwidth, term_mode)
 
+	if err != nil {
+		log.Fatalf("Failed to init a pseudo terminal: %v", err)
+		return err
+	}
+
+	stdin, err := s.session.StdinPipe()
+	if err != nil {
+		log.Fatalf("Failed to init input stream: %v", err)
+		return err
+	}
+
+	stdout, err := s.session.StdoutPipe()
+	if err != nil {
+		log.Fatalf("Failed to init output stream: %v", err)
+		return err
+	}
+
+	err = s.session.Shell()
+	if err != nil {
+		log.Fatalf("Failed to init a remote shell: %v", err)
+		return err
+	}
+
+	respchan_t := make(chan string)
+
+	go func() {
+		buf := make([]byte, MAX_BUFFER)
+		for {
+			n, err := stdout.Read(buf)
+			if err != nil {
+				return
+			}
+			respchan_t <- string(buf[:n])
+		}
+	}()
+	s.respchan = respchan_t
+	s.InChannel = stdin
+	s.OutChannel = stdout
+
+	return nil
 }
 
-func (s *SSHBase) ExecCommand(cmd string) (respone string, errorinfo string, err error){
-
+func (s *SSHBase) Close() {
+	if s.alive {
+		s.session.Close()
+		s.client.Close()
+		s.alive = false
+	}
 }
 
-func (s *SSHBase) sendcommand(cmd string) (int, error) {
-	return s.InChannel.Write(cmd + s.ReturnChar)
+func (s *SSHBase) readChannel() string {
+
+	respone := ""
+	delayed := false
+READEND:
+	for {
+		select {
+		case resp := <-s.respchan:
+			respone += normalizeLineFeeds(resp)
+			delayed = false
+
+		default:
+			if delayed {
+				break READEND
+			}
+			time.Sleep(s.readwaittime)
+			delayed = true
+		}
+	}
+	return respone
 }
+
+func (s *SSHBase) readChannelTiming(timeout time.Duration) string {
+	// timeouted read until timeout reached.
+	respone := ""
+	timer := time.NewTimer(timeout)
+READEND:
+	for {
+		select {
+		case resp := <-s.respchan:
+			respone += normalizeLineFeeds(resp)
+
+		case <-timer.C:
+			break READEND
+		}
+	}
+	return respone
+}
+
+func (s *SSHBase) readChannelExpect(expect string, timeout time.Duration) string {
+	// Expect string or break until timeout reached.
+	respone := ""
+	timer := time.NewTimer(timeout)
+READEND:
+	for {
+		select {
+		case resp := <-s.respchan:
+			respone += normalizeLineFeeds(resp)
+			if strings.Contains(respone, expect){
+				break READEND
+			}
+
+		case <-timer.C:
+			break READEND
+		}
+	}
+	return respone
+}
+
+func (s *SSHBase) readChannelExpectPrompt(timeout time.Duration) string {
+	// Expect string or break until timeout reached.
+	respone := ""
+	timer := time.NewTimer(timeout)
+READEND:
+	for {
+		select {
+		case resp := <-s.respchan:
+			respone += normalizeLineFeeds(resp)
+		case <-timer.C:
+			break READEND
+		default:
+			lines := strings.Split(strings.TrimSpace(respone), "\n")
+			if len_lines := len(lines); len_lines> 1{
+				if findPrompt(lines[len_lines-1]){
+					break READEND
+				}
+			}
+		}
+	}
+	return respone
+}
+
+func Normalize(s string) string {
+	return strings.TrimSpace(s) + "\n"
+}
+
+func normalizeLineFeeds(s string) string {
+	//strip all "\r" in line like "\r\r\n", "\r\n", etc.
+	return strings.Replace(s, "\r", "", -1)
+}
+
+func findPrompt(s string) bool {
+	/*Prompt Characters:
+		< > a-z A-Z 0-9 ~ * / _ - [] ()
+	 Prompt sample:
+		BJ_YF_311-F-02_N7718-1#
+		<BJ_YF_305-A-15_CE5810>
+		<BJ-YZH-101-1109/1111-LVS-S5500>
+		<BJ_YF_311_F-12-13_LVS_S5560>
+		[~BJ_YF_320-I-10_CE5810]
+	*/
+	r := regexp.MustCompile(`[<\w\[~@_\-\(\)\.\*\/]+(>|%|#|\$|\])`)
+	return r.MatchString(s)
+}
+
+func sanitizeRespone(resp string, stripcmd bool, stripprompt bool) string{
+	resp = strings.TrimSpace(resp)
+	if stripcmd && stripprompt {
+		lines := strings.Split(resp, "\n")
+		return strings.Join(lines[1:len(lines)-1], "\n")
+	}
+	if stripcmd{
+		lines := strings.SplitN(resp, "\n", 1)
+		return strings.Join(lines[1:], "")
+	}
+	if stripprompt{
+		lines := strings.Split(resp, "\n")
+		return strings.Join(lines[:len(lines)-1], "\n")
+	}
+
+	return resp
+}
+
+func (s *SSHBase) clearBuffer() {
+READEND:
+	for {
+		select {
+		case <-s.respchan:
+		default:
+			break READEND
+		}
+	}
+}
+
+func (s *SSHBase) preparateWriting() bool {
+	if findPrompt(s.readChannel()) {
+		return true
+	}
+	for i := 0; i < 3; i++ {
+		time.Sleep(time.Millisecond * 2)
+		resp, _, err := s.ExecCommand("")
+		if err != nil {
+			return false
+		}
+		if findPrompt(resp) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SSHBase) disablePaging(cmd string) bool {
+	if _, _, err := s.ExecCommand(cmd); err != nil {
+		return false
+	}
+	return true
+}
+
+func (s *SSHBase) SessionPreparation() bool {
+
+	if !s.preparateWriting() {
+		log.Fatalf("Unable to init the executable enviriment on remote terminal.")
+		return false
+	}
+
+	if !s.disablePaging("screen-length disable") {
+		return false
+	}
+
+	s.clearBuffer()
+
+	return true
+}
+
+
+func (s *SSHBase) sendCommand(cmd string) (int, error) {
+
+	return s.InChannel.Write([]byte(Normalize(cmd)))
+}
+
+func (s *SSHBase) ExecCommand(cmd string) (respone string, errorinfo string, err error) {
+
+	errorinfo = ""
+
+	s.clearBuffer()
+	_, err = s.sendCommand(cmd)
+	if err != nil {
+		log.Fatalf("Failed to send command to remote: %v", err)
+		return "", errorinfo, err
+	}
+
+	respone = s.readChannel()
+	err = nil
+	return
+}
+
+
 
 
 func main() {
-	LogAndRun("172.16.130.178")
+	sshoptions := SSHOptions{
+		PrivateKeyFile: "",
+		IgnorHostKey:   true,
+		BannerCallback: func(banner string) error {
+			return nil
+		},
+		TermType:    "vt100",
+		TermHeight:  560,
+		TermWidht:   480,
+		ReadWaitTime: time.Millisecond * 500, //Read data from a ssh channel timeout
+	}
 
+	device, err := SSH("172.28.0.1", "22", "", "", 10, sshoptions)
+	if err != nil {
+		log.Fatalf("Failed init ssh: %v", err)
+	}
+
+	if err := device.Connect(); err != nil {
+		log.Fatalf("Failed init ssh: %v", err)
+	}
+	defer device.Close()
+
+	if !device.SessionPreparation(){
+		log.Fatalf("Executable envirment unavalible!")
+		syscall.Exit(1)
+	}
+
+	resp, _, err := device.ExecCommand("display version")
+
+	resp = sanitizeRespone(resp, true, true)
+
+	if err != nil {
+		log.Fatalf("Error occured when exec cmd: %v", err)
+	} else {
+		fmt.Println(resp)
+	}
 }

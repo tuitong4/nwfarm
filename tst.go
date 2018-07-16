@@ -3,16 +3,18 @@ package main
 import (
 	"fmt"
 	"golang.org/x/crypto/ssh"
-	"time"
+	"io"
 	"net"
 	"strings"
+	"time"
 )
 
-
 type SSHSession struct {
-	session     *ssh.Session
-	in          chan string
-	out         chan string
+	session *ssh.Session
+	in      chan string
+	out     chan string
+	stdout  io.Reader
+	errchan chan string
 }
 
 func NewSSHSession(user, password, ipPort string) (*SSHSession, error) {
@@ -28,9 +30,6 @@ func NewSSHSession(user, password, ipPort string) (*SSHSession, error) {
 	}
 	return sshSession, nil
 }
-
-
-
 
 func (this *SSHSession) muxShell() error {
 	modes := ssh.TerminalModes{
@@ -50,8 +49,15 @@ func (this *SSHSession) muxShell() error {
 		return err
 	}
 
+	e, err := this.session.StderrPipe()
+	if err != nil {
+		return err
+	}
+
 	in := make(chan string, 0)
 	out := make(chan string, 0)
+	errs := make(chan string, 0)
+
 	go func() {
 		for cmd := range in {
 			w.Write([]byte(cmd + "\n"))
@@ -73,8 +79,33 @@ func (this *SSHSession) muxShell() error {
 			t = 0
 		}
 	}()
+
+	go func() {
+		var (
+			buf [65 * 1024]byte
+			t   int
+		)
+		for {
+			n, err := e.Read(buf[t:])
+			if err != nil {
+				return
+			}
+			t += n
+			if n == 0 {
+				fmt.Println("Error: read 0 byte!")
+				errs <- string("")
+			} else {
+				fmt.Println("Error: read OK!")
+				errs <- string(buf[:t])
+			}
+			t = 0
+		}
+	}()
+
 	this.in = in
 	this.out = out
+	this.stdout = r
+	this.errchan = errs
 	return nil
 }
 
@@ -84,7 +115,6 @@ func (this *SSHSession) start() error {
 	}
 	return nil
 }
-
 
 func (this *SSHSession) createConnection(user, password, ipPort string) error {
 
@@ -144,26 +174,66 @@ ExitLoop:
 	return result
 }
 
-
-func foo() (ok bool, err string){
+func foo() (ok bool, err string) {
 	return true, "Error"
 }
 
 func main() {
-	host := "172.28.1.1"
+	host := "172.19.1.1"
 	port := "22"
-	username := ""
-	pass := ""
+	username := "duanchengping"
+	pass := "dev&ops"
 
-	d, err:= NewSSHSession(username, pass, host+":"+port)
-	if err != nil{
+	d, err := NewSSHSession(username, pass, host+":"+port)
+	if err != nil {
 		fmt.Println(err)
 	}
 
-	d.in <- "display version\n"
+	d.session.Run("show versinon")
 
-	fmt.Print(<-d.out)
-	fmt.Print(<-d.out)
+
+	//d.in <- "show version"
+	//time.Sleep(time.Second * 2)
+
+	output_t := ""
+	timeout := make(chan struct{})
+	go func() {
+		time.Sleep(time.Duration(1) * time.Second)
+		timeout <- struct{}{}
+	}()
+
+STDOUT:
+	for {
+		select {
+		case output := <-d.out:
+			output_t += output
+
+		case <-timeout:
+			break STDOUT
+		}
+
+	}
+
+	errtimeout := make(chan struct{})
+	go func() {
+		time.Sleep(time.Duration(1) * time.Second)
+		errtimeout <- struct{}{}
+	}()
+
+	erroutput_t := ""
+STDERR:
+	for {
+		select {
+		case output := <-d.out:
+			erroutput_t += output
+
+		case <-errtimeout:
+			break STDERR
+		}
+
+	}
+	fmt.Println("STDOUT: ", output_t)
+	fmt.Println("STDError: ", erroutput_t)
 
 
 }
