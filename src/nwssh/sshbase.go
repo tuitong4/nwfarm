@@ -1,9 +1,8 @@
-package main
+package nwssh
 
 import (
 	"bufio"
 	"errors"
-	"fmt"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"io/ioutil"
@@ -13,24 +12,23 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"syscall"
 )
 
-const MAX_BUFFER = 1024 * 10
+const MaxBuffer = 1024 * 10
 
 type SSHBase struct {
-	host        string
-	port        string
-	sshconfig   *ssh.ClientConfig
-	client      *ssh.Client
-	session     *ssh.Session
-	termheight  int
-	termwidth   int
-	termtype    string
-	alive       bool
-	InChannel   io.WriteCloser
-	OutChannel  io.Reader
-	respchan    chan string
+	host         string
+	port         string
+	sshconfig    *ssh.ClientConfig
+	client       *ssh.Client
+	session      *ssh.Session
+	termheight   int
+	termwidth    int
+	termtype     string
+	alive        bool
+	InChannel    io.WriteCloser
+	OutChannel   io.Reader
+	respchan     chan string
 	readwaittime time.Duration
 }
 
@@ -41,7 +39,7 @@ type SSHOptions struct {
 	TermType       string
 	TermHeight     int
 	TermWidht      int
-	ReadWaitTime    time.Duration //Read data from a ssh channel timeout
+	ReadWaitTime   time.Duration //Read data from a ssh channel timeout
 }
 
 func SSH(host, port, username, password string, timeout time.Duration, sshopts SSHOptions) (*SSHBase, error) {
@@ -79,12 +77,12 @@ func SSH(host, port, username, password string, timeout time.Duration, sshopts S
 	}
 
 	ssh_client := &SSHBase{
-		host:        host,
-		port:        port,
-		sshconfig:   config,
-		termheight:  sshopts.TermHeight,
-		termwidth:   sshopts.TermWidht,
-		termtype:    sshopts.TermType,
+		host:         host,
+		port:         port,
+		sshconfig:    config,
+		termheight:   sshopts.TermHeight,
+		termwidth:    sshopts.TermWidht,
+		termtype:     sshopts.TermType,
 		readwaittime: sshopts.ReadWaitTime,
 	}
 	return ssh_client, nil
@@ -191,7 +189,7 @@ func (s *SSHBase) invokeShell() error {
 	respchan_t := make(chan string)
 
 	go func() {
-		buf := make([]byte, MAX_BUFFER)
+		buf := make([]byte, MaxBuffer)
 		for {
 			n, err := stdout.Read(buf)
 			if err != nil {
@@ -254,29 +252,31 @@ READEND:
 	return respone
 }
 
-func (s *SSHBase) readChannelExpect(expect string, timeout time.Duration) string {
+func (s *SSHBase) readChannelExpect(expect string, timeout time.Duration) (respone string, err error) {
 	// Expect string or break until timeout reached.
-	respone := ""
+	respone = ""
 	timer := time.NewTimer(timeout)
 READEND:
 	for {
 		select {
 		case resp := <-s.respchan:
 			respone += normalizeLineFeeds(resp)
-			if strings.Contains(respone, expect){
+			if strings.Contains(respone, expect) {
 				break READEND
 			}
 
 		case <-timer.C:
+			err = errors.New("Timed-out reading channel, pattern not found in output.")
+			log.Fatalf("%v%s", err, expect)
 			break READEND
 		}
 	}
-	return respone
+	return
 }
 
-func (s *SSHBase) readChannelExpectPrompt(timeout time.Duration) string {
+func (s *SSHBase) readChannelExpectPrompt(timeout time.Duration) (respone string, err error) {
 	// Expect string or break until timeout reached.
-	respone := ""
+	respone = ""
 	timer := time.NewTimer(timeout)
 READEND:
 	for {
@@ -284,17 +284,19 @@ READEND:
 		case resp := <-s.respchan:
 			respone += normalizeLineFeeds(resp)
 		case <-timer.C:
+			err = errors.New("Timed-out reading channel, prompt not found in output.")
+			log.Fatalf("%v", err)
 			break READEND
 		default:
 			lines := strings.Split(strings.TrimSpace(respone), "\n")
-			if len_lines := len(lines); len_lines> 1{
-				if findPrompt(lines[len_lines-1]){
+			if len_lines := len(lines); len_lines > 1 {
+				if findPrompt(lines[len_lines-1]) {
 					break READEND
 				}
 			}
 		}
 	}
-	return respone
+	return respone, err
 }
 
 func Normalize(s string) string {
@@ -315,22 +317,25 @@ func findPrompt(s string) bool {
 		<BJ-YZH-101-1109/1111-LVS-S5500>
 		<BJ_YF_311_F-12-13_LVS_S5560>
 		[~BJ_YF_320-I-10_CE5810]
+
+	NOT SAFE OPERATION!!!!!!!!!!!!
 	*/
-	r := regexp.MustCompile(`[<\w\[~@_\-\(\)\.\*\/]+(>|%|#|\$|\])`)
+
+	r := regexp.MustCompile(`[<\[\w~@_\-\(\)\.\*\/]+(>|%|#|\]|\$)`)
 	return r.MatchString(s)
 }
 
-func sanitizeRespone(resp string, stripcmd bool, stripprompt bool) string{
+func SanitizeRespone(resp string, stripcmd bool, stripprompt bool) string {
 	resp = strings.TrimSpace(resp)
 	if stripcmd && stripprompt {
 		lines := strings.Split(resp, "\n")
 		return strings.Join(lines[1:len(lines)-1], "\n")
 	}
-	if stripcmd{
+	if stripcmd {
 		lines := strings.SplitN(resp, "\n", 1)
 		return strings.Join(lines[1:], "")
 	}
-	if stripprompt{
+	if stripprompt {
 		lines := strings.Split(resp, "\n")
 		return strings.Join(lines[:len(lines)-1], "\n")
 	}
@@ -355,7 +360,7 @@ func (s *SSHBase) preparateWriting() bool {
 	}
 	for i := 0; i < 3; i++ {
 		time.Sleep(time.Millisecond * 2)
-		resp, _, err := s.ExecCommand("")
+		resp, err := s.ExecCommand("")
 		if err != nil {
 			return false
 		}
@@ -367,7 +372,7 @@ func (s *SSHBase) preparateWriting() bool {
 }
 
 func (s *SSHBase) disablePaging(cmd string) bool {
-	if _, _, err := s.ExecCommand(cmd); err != nil {
+	if _, err := s.ExecCommand(cmd); err != nil {
 		return false
 	}
 	return true
@@ -380,7 +385,7 @@ func (s *SSHBase) SessionPreparation() bool {
 		return false
 	}
 
-	if !s.disablePaging("screen-length disable") {
+	if !s.disablePaging("") {
 		return false
 	}
 
@@ -389,21 +394,17 @@ func (s *SSHBase) SessionPreparation() bool {
 	return true
 }
 
-
 func (s *SSHBase) sendCommand(cmd string) (int, error) {
 
 	return s.InChannel.Write([]byte(Normalize(cmd)))
 }
 
-func (s *SSHBase) ExecCommand(cmd string) (respone string, errorinfo string, err error) {
-
-	errorinfo = ""
-
+func (s *SSHBase) ExecCommand(cmd string) (respone string, err error) {
 	s.clearBuffer()
 	_, err = s.sendCommand(cmd)
 	if err != nil {
 		log.Fatalf("Failed to send command to remote: %v", err)
-		return "", errorinfo, err
+		return "", err
 	}
 
 	respone = s.readChannel()
@@ -411,44 +412,37 @@ func (s *SSHBase) ExecCommand(cmd string) (respone string, errorinfo string, err
 	return
 }
 
-
-
-
-func main() {
-	sshoptions := SSHOptions{
-		PrivateKeyFile: "",
-		IgnorHostKey:   true,
-		BannerCallback: func(banner string) error {
-			return nil
-		},
-		TermType:    "vt100",
-		TermHeight:  560,
-		TermWidht:   480,
-		ReadWaitTime: time.Millisecond * 500, //Read data from a ssh channel timeout
-	}
-
-	device, err := SSH("172.28.0.1", "22", "", "", 10, sshoptions)
+func (s *SSHBase) ExecCommandTiming(cmd string, timeout time.Duration) (respone string, err error) {
+	s.clearBuffer()
+	_, err = s.sendCommand(cmd)
 	if err != nil {
-		log.Fatalf("Failed init ssh: %v", err)
+		log.Fatalf("Failed to send command to remote: %v", err)
+		return "", err
 	}
 
-	if err := device.Connect(); err != nil {
-		log.Fatalf("Failed init ssh: %v", err)
-	}
-	defer device.Close()
+	respone = s.readChannelTiming(timeout)
+	return
+}
 
-	if !device.SessionPreparation(){
-		log.Fatalf("Executable envirment unavalible!")
-		syscall.Exit(1)
-	}
-
-	resp, _, err := device.ExecCommand("display version")
-
-	resp = sanitizeRespone(resp, true, true)
-
+func (s *SSHBase) ExecCommandExpect(cmd string, expect string, timeout time.Duration) (respone string, err error) {
+	s.clearBuffer()
+	_, err = s.sendCommand(cmd)
 	if err != nil {
-		log.Fatalf("Error occured when exec cmd: %v", err)
-	} else {
-		fmt.Println(resp)
+		log.Fatalf("Failed to send command to remote: %v", err)
+		return "", err
 	}
+
+	respone, err = s.readChannelExpect(expect, timeout)
+	return
+}
+
+func (s *SSHBase) ExecCommandExpectPrompt(cmd string, timeout time.Duration) (respone string, err error) {
+	s.clearBuffer()
+	_, err = s.sendCommand(cmd)
+	if err != nil {
+		log.Fatalf("Failed to send command to remote: %v", err)
+		return "", err
+	}
+	respone, err = s.readChannelExpectPrompt(timeout)
+	return
 }
