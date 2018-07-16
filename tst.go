@@ -181,8 +181,8 @@ func foo() (ok bool, err string) {
 func main() {
 	host := "172.19.1.1"
 	port := "22"
-	username := "duanchengping"
-	pass := "dev&ops"
+	username := ""
+	pass := ""
 
 	d, err := NewSSHSession(username, pass, host+":"+port)
 	if err != nil {
