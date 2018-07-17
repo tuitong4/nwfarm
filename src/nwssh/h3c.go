@@ -5,14 +5,13 @@ import (
 	"time"
 )
 
-type H3CSSH struct {
+type H3cSSH struct {
 	*SSHBase
 }
 
-func (s *H3CSSH) SessionPreparation() bool {
+func (s *H3cSSH) SessionPreparation() bool {
 
 	if !s.preparateWriting() {
-		log.Fatalf("Unable to init the executable enviriment on remote terminal.")
 		return false
 	}
 
@@ -25,7 +24,7 @@ func (s *H3CSSH) SessionPreparation() bool {
 	return true
 }
 
-func (s *H3CSSH) SaveRuningConfig() bool {
+func (s *H3cSSH) SaveRuningConfig() bool {
 	_, err := s.ExecCommandExpectPrompt("save force", time.Second*20)
 	if err != nil {
 		log.Fatalf("%v", err)

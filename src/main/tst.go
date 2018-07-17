@@ -21,16 +21,16 @@ func main() {
 		ReadWaitTime: time.Millisecond * 500, //Read data from a ssh channel timeout
 	}
 
-	device, err := nwssh.SSH("172.28.0.1", "22", "d", "", 2, sshoptions)
+	device, err := nwssh.SSH("10.196.4.224", "22", "duanchengping", "dev&ops", 10, sshoptions)
 	if err != nil {
-		log.Fatalf("Failed init ssh: %v", err)
+		log.Fatalf("%v", err)
 	}
 
 	if err := device.Connect(); err != nil {
 		log.Fatalf("Failed init ssh: %v", err)
 	}
 
-	h3c_sw := nwssh.H3CSSH{device}
+	h3c_sw := nwssh.RuijieSSH{device}
 	defer h3c_sw.Close()
 
 	if !h3c_sw.SessionPreparation() {

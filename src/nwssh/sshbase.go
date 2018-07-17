@@ -3,10 +3,10 @@ package nwssh
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -58,10 +58,12 @@ func SSH(host, port, username, password string, timeout time.Duration, sshopts S
 	if sshopts.PrivateKeyFile != "" {
 
 		key, err := ioutil.ReadFile(sshopts.PrivateKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to opne file '%s'.%v", sshopts.PrivateKeyFile, err)
+		}
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			log.Fatalf("Unable to parse private key: %v", err)
-			return nil, errors.New("Unable to parse private key.")
+			return nil, fmt.Errorf("Unable to parse private key.%v", err)
 		}
 		config.Auth = []ssh.AuthMethod{
 			ssh.PublicKeys(signer),
@@ -92,7 +94,7 @@ func getHostKey(host string) ssh.PublicKey {
 	// parse OpenSSH known_hosts file
 	file, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts"))
 	if err != nil {
-		log.Fatal("Unable to load known_hosts file, %v", err)
+		return nil
 	}
 	defer file.Close()
 
@@ -107,14 +109,10 @@ func getHostKey(host string) ssh.PublicKey {
 			var err error
 			hostKey, _, _, _, err = ssh.ParseAuthorizedKey(scanner.Bytes())
 			if err != nil {
-				log.Fatalf("Error parsing %q: %v", fields[2], err)
+				return nil
 			}
 			break
 		}
-	}
-
-	if hostKey == nil {
-		log.Fatalf("No hostkey found for %s", host)
 	}
 
 	return hostKey
@@ -122,29 +120,24 @@ func getHostKey(host string) ssh.PublicKey {
 
 func (s *SSHBase) Connect() error {
 	if s.alive {
-		log.Fatalf("SSH Connection is opened.")
+		return errors.New("SSH Connection is opened.")
 	}
 	client, err := ssh.Dial("tcp", s.host+":"+s.port, s.sshconfig)
 	if err != nil {
-		log.Fatalf("Unable to connect to remote host: %v", err)
-		return err
+		return fmt.Errorf("Unable to connect to remote host: %v", err)
 	}
-	//defer client.Close()
 
 	sess, err := client.NewSession()
 
 	if err != nil {
-		log.Fatalf("Failed to create a session: %v", err)
-		return err
+		return fmt.Errorf("Failed to create a session: %v", err)
 	}
-	//defer sess.Close()
 
 	s.session = sess
 
 	err = s.invokeShell()
 	if err != nil {
-		log.Fatalf("Failed to create a shell: %v", err)
-		return err
+		return fmt.Errorf("Failed to create a shell: %v", err)
 	}
 
 	s.alive = true
@@ -157,33 +150,29 @@ func (s *SSHBase) invokeShell() error {
 
 	term_mode := ssh.TerminalModes{
 		ssh.ECHO:          0,     // disable echoing
-		ssh.TTY_OP_ISPEED: 14400, // input speed = 38.4kbaud
-		ssh.TTY_OP_OSPEED: 14400, // output speed = 38.4kbaud
+		ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+		ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
 	}
 
 	err := s.session.RequestPty(s.termtype, s.termheight, s.termwidth, term_mode)
 
 	if err != nil {
-		log.Fatalf("Failed to init a pseudo terminal: %v", err)
-		return err
+		return fmt.Errorf("Failed to init a pseudo terminal: %v", err)
 	}
 
 	stdin, err := s.session.StdinPipe()
 	if err != nil {
-		log.Fatalf("Failed to init input stream: %v", err)
-		return err
+		return fmt.Errorf("Failed to init input stream: %v", err)
 	}
 
 	stdout, err := s.session.StdoutPipe()
 	if err != nil {
-		log.Fatalf("Failed to init output stream: %v", err)
-		return err
+		return fmt.Errorf("Failed to init output stream: %v", err)
 	}
 
 	err = s.session.Shell()
 	if err != nil {
-		log.Fatalf("Failed to init a remote shell: %v", err)
-		return err
+		return fmt.Errorf("Failed to init a remote shell: %v", err)
 	}
 
 	respchan_t := make(chan string)
@@ -266,8 +255,7 @@ READEND:
 			}
 
 		case <-timer.C:
-			err = errors.New("Timed-out reading channel, pattern not found in output.")
-			log.Fatalf("%v%s", err, expect)
+			err = fmt.Errorf("Timed-out reading channel, pattern '%s' not found in output.", expect)
 			break READEND
 		}
 	}
@@ -284,8 +272,7 @@ READEND:
 		case resp := <-s.respchan:
 			respone += normalizeLineFeeds(resp)
 		case <-timer.C:
-			err = errors.New("Timed-out reading channel, prompt not found in output.")
-			log.Fatalf("%v", err)
+			err = fmt.Errorf("Timed-out reading channel, prompt not found in output.")
 			break READEND
 		default:
 			lines := strings.Split(strings.TrimSpace(respone), "\n")
@@ -381,7 +368,6 @@ func (s *SSHBase) disablePaging(cmd string) bool {
 func (s *SSHBase) SessionPreparation() bool {
 
 	if !s.preparateWriting() {
-		log.Fatalf("Unable to init the executable enviriment on remote terminal.")
 		return false
 	}
 
@@ -396,17 +382,20 @@ func (s *SSHBase) SessionPreparation() bool {
 
 func (s *SSHBase) sendCommand(cmd string) (int, error) {
 
-	return s.InChannel.Write([]byte(Normalize(cmd)))
+	n, err := s.InChannel.Write([]byte(Normalize(cmd)))
+	if err != nil {
+		err = fmt.Errorf("Failed to send command `%s` to remote.%v", cmd, err)
+	}
+
+	return n, err
 }
 
 func (s *SSHBase) ExecCommand(cmd string) (respone string, err error) {
 	s.clearBuffer()
 	_, err = s.sendCommand(cmd)
 	if err != nil {
-		log.Fatalf("Failed to send command to remote: %v", err)
 		return "", err
 	}
-
 	respone = s.readChannel()
 	err = nil
 	return
@@ -416,10 +405,8 @@ func (s *SSHBase) ExecCommandTiming(cmd string, timeout time.Duration) (respone 
 	s.clearBuffer()
 	_, err = s.sendCommand(cmd)
 	if err != nil {
-		log.Fatalf("Failed to send command to remote: %v", err)
 		return "", err
 	}
-
 	respone = s.readChannelTiming(timeout)
 	return
 }
@@ -428,7 +415,6 @@ func (s *SSHBase) ExecCommandExpect(cmd string, expect string, timeout time.Dura
 	s.clearBuffer()
 	_, err = s.sendCommand(cmd)
 	if err != nil {
-		log.Fatalf("Failed to send command to remote: %v", err)
 		return "", err
 	}
 
@@ -440,7 +426,6 @@ func (s *SSHBase) ExecCommandExpectPrompt(cmd string, timeout time.Duration) (re
 	s.clearBuffer()
 	_, err = s.sendCommand(cmd)
 	if err != nil {
-		log.Fatalf("Failed to send command to remote: %v", err)
 		return "", err
 	}
 	respone, err = s.readChannelExpectPrompt(timeout)
