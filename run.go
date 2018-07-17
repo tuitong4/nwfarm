@@ -16,7 +16,7 @@ import (
 	"syscall"
 )
 
-const MAX_BUFFER = 1024 * 10
+const MaxBuffer = 1024 * 10
 
 type SSHBase struct {
 	host        string
@@ -191,7 +191,7 @@ func (s *SSHBase) invokeShell() error {
 	respchan_t := make(chan string)
 
 	go func() {
-		buf := make([]byte, MAX_BUFFER)
+		buf := make([]byte, MaxBuffer)
 		for {
 			n, err := stdout.Read(buf)
 			if err != nil {
@@ -389,7 +389,6 @@ func (s *SSHBase) SessionPreparation() bool {
 	return true
 }
 
-
 func (s *SSHBase) sendCommand(cmd string) (int, error) {
 
 	return s.InChannel.Write([]byte(Normalize(cmd)))
@@ -410,8 +409,6 @@ func (s *SSHBase) ExecCommand(cmd string) (respone string, errorinfo string, err
 	err = nil
 	return
 }
-
-
 
 
 func main() {
