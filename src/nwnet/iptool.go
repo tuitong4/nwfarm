@@ -1,17 +1,16 @@
-package net
+package nwnet
 
 import (
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-)	
+)
 
 type IPv4 struct {
-	IP   uint32
+	IP      uint32
 	MaskLen uint32
 }
-
 
 func IP(ipv4str string) (ip IPv4, err error) {
 	/*
@@ -86,7 +85,7 @@ func (ip IPv4) IPStr() string {
 	return fmt.Sprintf("%d.%d.%d.%d", ip_val>>24, ip_val<<8>>24, ip_val<<16>>24, ip_val<<24>>24)
 }
 
-func power2(n uint32) uint32{
+func power2(n uint32) uint32 {
 	/*
 		Calculate the value of 2**n.
 		Do not compute n > 32
@@ -100,18 +99,17 @@ func power2(n uint32) uint32{
 
 }
 
-
-func (ip IPv4) NetworkAddr() (net IPv4){
+func (ip IPv4) NetworkAddr() (net IPv4) {
 	/*
 		Return the network address of the IPv4 address;
 		return a new IPv4 struct.
 	*/
-	
+
 	var mask_len uint32
 
-	if ip.MaskLen == 33{
+	if ip.MaskLen == 33 {
 		mask_len = 32
-	} else{
+	} else {
 		mask_len = ip.MaskLen
 	}
 
@@ -122,13 +120,13 @@ func (ip IPv4) NetworkAddr() (net IPv4){
 }
 
 func main() {
-/*	t, err := StrtoIPv4("172.255.20.1")
-	_ = err
-	fmt.Println(IPv4toStr(t))
-	fmt.Println(t.NetworkAddr())*/
+	/*	t, err := StrtoIPv4("172.255.20.1")
+		_ = err
+		fmt.Println(IPv4toStr(t))
+		fmt.Println(t.NetworkAddr())*/
 	var val uint32
 
-	val =  16777729 & 4294967040
+	val = 16777729 & 4294967040
 	t := IPv4{}
 	t.IP = val
 	t.MaskLen = 32

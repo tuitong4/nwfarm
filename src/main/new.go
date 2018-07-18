@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"net"
+	"os"
 )
-
 
 type NetworkSwitch struct {
 	Name      string
@@ -34,7 +33,6 @@ type PhysicalInterface struct {
 	AdminStatus string
 	LineCard    *LineCard
 }
-
 
 func main() {
 	fmt.Println("")
