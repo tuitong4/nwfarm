@@ -30,6 +30,7 @@ type SSHBase struct {
 	OutChannel   io.Reader
 	respchan     chan string
 	readwaittime time.Duration
+	WelecomInfo  string
 }
 
 type SSHOptions struct {
@@ -54,6 +55,7 @@ func SSH(host, port, username, password string, timeout time.Duration, sshopts S
 	}
 
 	config.Config.Ciphers = append(config.Config.Ciphers, "aes128-cbc")
+	config.Config.Ciphers = append(config.Config.Ciphers, "aes128-ctr")
 
 	if sshopts.PrivateKeyFile != "" {
 
@@ -142,6 +144,7 @@ func (s *SSHBase) Connect() error {
 
 	s.alive = true
 	s.client = client
+	s.WelecomInfo = s.readChannel()
 
 	return nil
 }
@@ -342,9 +345,14 @@ READEND:
 }
 
 func (s *SSHBase) preparateWriting() bool {
+	if findPrompt(s.WelecomInfo) {
+		return true
+	}
+
 	if findPrompt(s.readChannel()) {
 		return true
 	}
+
 	for i := 0; i < 3; i++ {
 		time.Sleep(time.Millisecond * 2)
 		resp, err := s.ExecCommand("")
