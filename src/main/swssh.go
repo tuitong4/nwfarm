@@ -2,14 +2,14 @@ package main
 
 import (
 	"bufio"
+	"debug/elf"
 	"flag"
 	"fmt"
+	"log"
 	"nwssh"
 	"os"
 	"strings"
 	"time"
-	"log"
-	"debug/elf"
 )
 
 type Args struct {
@@ -118,7 +118,7 @@ func guessVendorByBanner(banner string) string {
 	return ""
 }
 
-var WelecomInfoVendorKeys map[string] = map[string]string{
+var WelecomInfoVendorKeys map[string]string = map[string]string{
 	"H3C":    "h3c",
 	"HUAWEI": "info",
 	"NEXUS":  "nexus",
@@ -126,7 +126,7 @@ var WelecomInfoVendorKeys map[string] = map[string]string{
 	"RUIJIE": "ruijie", //RUIJIE is not support welecominfo default, so we still use "ruijie" as the key even it takes no effect,
 }
 
-func guessVendorByWelecomInfo(welecominfo string) string{
+func guessVendorByWelecomInfo(welecominfo string) string {
 	s := strings.ToLower(welecominfo)
 	for k, v := range WelecomInfoVendorKeys {
 		if strings.Contains(s, v) {
@@ -136,15 +136,15 @@ func guessVendorByWelecomInfo(welecominfo string) string{
 	return ""
 }
 
-var VersionInfoVendorKeys map[string] = map[string]string{
-"H3C":    "H3C",
-"HUAWEI": "HUAWEI",
-"NEXUS":  "Nexus",
-"CISCO":  "Cisco IOS",
-"RUIJIE": "Ruijie",
+var VersionInfoVendorKeys map[string]string = map[string]string{
+	"H3C":    "H3C",
+	"HUAWEI": "HUAWEI",
+	"NEXUS":  "Nexus",
+	"CISCO":  "Cisco IOS",
+	"RUIJIE": "Ruijie",
 }
 
-func guessVendorByVesionInfo(versioninfo string) string{
+func guessVendorByVesionInfo(versioninfo string) string {
 	for k, v := range WelecomInfoVendorKeys {
 		if strings.Contains(versioninfo, v) {
 			return k
@@ -153,12 +153,11 @@ func guessVendorByVesionInfo(versioninfo string) string{
 	return ""
 }
 
-
-func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Args,) {
+func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Args) {
 	var banner string
 	var device nwssh.SSHBase
 	vendor := *args.swvendor
-	if vendor = "" {
+	if vendor == "" {
 		sshoptions.BannerCallback = func(message string) error {
 			banner = message
 			return nil
@@ -172,10 +171,10 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		return
 	}
 
-	if vendor == ""{
-		if vendor = guessVendorByWelecomInfo(device.WelecomInfo); vendor == ""{
-			if vendor = guessVendorByBanner(banner); vendor == ""{
-				
+	if vendor == "" {
+		if vendor = guessVendorByWelecomInfo(device.WelecomInfo); vendor == "" {
+			if vendor = guessVendorByBanner(banner); vendor == "" {
+				"Do something"
 			}
 		}
 	}
