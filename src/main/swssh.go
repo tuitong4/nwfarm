@@ -7,6 +7,9 @@ import (
 	"nwssh"
 	"os"
 	"strings"
+	"time"
+	"log"
+	"debug/elf"
 )
 
 type Args struct {
@@ -112,21 +115,73 @@ func guessVendorByBanner(banner string) string {
 			return k
 		}
 	}
-
 	return ""
 }
 
-func run(host, port string, sshoptions nwssh.SSHOptions, args *Args) {
-	if *args.swvendor != "" {
-		var swvendor string
+var WelecomInfoVendorKeys map[string] = map[string]string{
+	"H3C":    "h3c",
+	"HUAWEI": "info",
+	"NEXUS":  "nexus",
+	"CISCO":  "user",
+	"RUIJIE": "ruijie", //RUIJIE is not support welecominfo default, so we still use "ruijie" as the key even it takes no effect,
+}
+
+func guessVendorByWelecomInfo(welecominfo string) string{
+	s := strings.ToLower(welecominfo)
+	for k, v := range WelecomInfoVendorKeys {
+		if strings.Contains(s, v) {
+			return k
+		}
+	}
+	return ""
+}
+
+var VersionInfoVendorKeys map[string] = map[string]string{
+"H3C":    "H3C",
+"HUAWEI": "HUAWEI",
+"NEXUS":  "Nexus",
+"CISCO":  "Cisco IOS",
+"RUIJIE": "Ruijie",
+}
+
+func guessVendorByVesionInfo(versioninfo string) string{
+	for k, v := range WelecomInfoVendorKeys {
+		if strings.Contains(versioninfo, v) {
+			return k
+		}
+	}
+	return ""
+}
+
+
+func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Args,) {
+	var banner string
+	var device nwssh.SSHBase
+	vendor := *args.swvendor
+	if vendor = "" {
 		sshoptions.BannerCallback = func(message string) error {
-			swvendor = message
+			banner = message
 			return nil
 		}
 	}
 
+	device = nwssh.SSH{host, port, *args.username, *args.password, *args.timeout * time.Second, sshoptions}
+
+	if err := device.Connect(); err != nil {
+		log.Printf("[%s]%v\n", host, err)
+		return
+	}
+
+	if vendor == ""{
+		if vendor = guessVendorByWelecomInfo(device.WelecomInfo); vendor == ""{
+			if vendor = guessVendorByBanner(banner); vendor == ""{
+				
+			}
+		}
+	}
 }
 
 func main() {
 	fmt.Println(readhostfile("hosts"))
+
 }

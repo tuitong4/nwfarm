@@ -47,7 +47,7 @@ func SSH(host, port, username, password string, timeout time.Duration, sshopts S
 
 	config := &ssh.ClientConfig{
 		User:    username,
-		Timeout: timeout * time.Second, //time.duration should be lager than 1 second.
+		Timeout: timeout, //time.duration should be lager than 1 second.
 		Auth: []ssh.AuthMethod{
 			ssh.Password(password),
 		},
