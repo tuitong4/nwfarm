@@ -16,6 +16,17 @@ import (
 
 const MaxBuffer = 1024 * 10
 
+type SSHBASE interface {
+	Connect()
+	Close()
+	SessionPreparation()
+	ExecCommand(string)
+	ExecCommandTiming(string, time.Duration)
+	ExecCommandExpect(string, string, time.Duration)
+	ExecCommandExpectPrompt(string, time.Duration)
+	SaveRuningConfig()
+}
+
 type SSHBase struct {
 	host         string
 	port         string

@@ -9,6 +9,7 @@ import (
 	"nwssh"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,6 +26,8 @@ type Args struct {
 	strictmode   bool
 	timeout      int
 	readwaittime int
+	cmdtimeout   int
+	cmdinterval  int
 	logdir       string
 	conffiledir  string
 	transcation  string
@@ -78,6 +81,11 @@ filename will used as target hostname.`)
 
 	flag.StringVar(&args.privatekey, "pkey", "", `Private key used to login on devie.`)
 
+	flag.StringVar(&args.cmdtimeout, "cmdtimeout", 10, `Waiting time when exec command expect prompt, if timeout reached, 
+return the respone and ignore the prompt.`)
+
+	flag.StringVar(&args.cmdinterval, "cmdinterval", 2, `The interval between execution of two commands.`)
+
 	flag.Parse()
 
 }
@@ -123,7 +131,7 @@ var WelecomInfoVendorKeys map[string]string = map[string]string{
 	"HUAWEI": "info",
 	"NEXUS":  "nexus",
 	"CISCO":  "user",
-	"RUIJIE": "ruijie", //RUIJIE is not support welecominfo default, so we still use "ruijie" as the key even it takes no effect,
+	"RUIJIE": "ruijie", //RUIJIE is not support welecominfo default, so we still use "ruijie" as the key even it takes no effect.
 }
 
 func guessVendorByWelecomInfo(welecominfo string) string {
@@ -153,9 +161,40 @@ func guessVendorByVesionInfo(versioninfo string) string {
 	return ""
 }
 
+func guessVendor(s *nwssh.SSHBase, banner string) string {
+	if vendor := guessVendorByWelecomInfo(s.WelecomInfo); vendor == "" {
+		if vendor = guessVendorByBanner(banner); vendor == "" {
+
+			resp, _ := s.ExecCommand(`show version | in Ruij`)
+			if strings.Contains(rsp, "Ruijie") {
+				return "RUIJIE"
+			}
+
+			resp, _ = s.ExecCommand(`show version | in Software`)
+			if strings.Contains(rsp, "Nexus") {
+				return "NEXUS"
+			}
+			if strings.Contains(rsp, "Cisco") {
+				return "CISCO"
+			}
+
+			resp, _ = s.ExecCommand(`display version | in Copyright`)
+			rsp := strings.ToLower(resp)
+			if strings.Contains(rsp, "h3c") {
+				return "H3C"
+			}
+			if strings.Contains(rsp, "huawei") {
+				return "HUAWEI"
+			}
+
+		}
+		return vendor
+	}
+}
+
 func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Args) {
 	var banner string
-	var device nwssh.SSHBase
+	var devssh nwssh.SSHBase
 	vendor := *args.swvendor
 	if vendor == "" {
 		sshoptions.BannerCallback = func(message string) error {
@@ -164,20 +203,92 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		}
 	}
 
-	device = nwssh.SSH{host, port, *args.username, *args.password, *args.timeout * time.Second, sshoptions}
+	devssh = nwssh.SSH{host, port, *args.username, *args.password, *args.timeout * time.Second, sshoptions}
 
-	if err := device.Connect(); err != nil {
+	if err := devssh.Connect(); err != nil {
 		log.Printf("[%s]%v\n", host, err)
 		return
 	}
 
 	if vendor == "" {
-		if vendor = guessVendorByWelecomInfo(device.WelecomInfo); vendor == "" {
-			if vendor = guessVendorByBanner(banner); vendor == "" {
-				"Do something"
-			}
+		vendor = guessVendor(&devssh, banner)
+		if vendor == "" {
+			log.Printf("[%s]Failed prasie device's vendor automatically.\n", host)
+			return
 		}
 	}
+
+	var device nwssh.SSHBASE
+	if vendor == "H3C" {
+		device = nwssh.H3cSSH{&devssh}
+	} else if vendor == "HUAWEI" {
+		device = nwssh.HuaweiSSH{&devssh}
+	} else if vendor == "NEXUS" {
+		device = nwssh.NexusSSH{&devssh}
+	} else if vendor == "CISCO" {
+		device = nwssh.CiscoSSH{&devssh}
+	} else if vendor == "RUIJIE" {
+		device = nwssh.RuijieSSH{&devssh}
+	}
+
+	var output string
+	var mutex sync.Mutex
+	if *args.strictmode {
+		for _, cmd := range cmds {
+			o, err := device.ExecCommandExpectPrompt(cmd, time.Second*args.cmdtimeout)
+
+			if err != nil {
+				log.Printf("[%s]Failed exec cmd '%s'. Error: %v", host, cmd, err)
+				output += o
+				if *args.logdir != "" {
+					writefile(*args.logdir+host, output)
+				} else {
+					mutex.Lock()
+					os.Stdin.Write([]byte(output))
+					mutex.Unlock()
+				}
+				return
+			}
+		}
+		if *args.logdir != "" {
+			writefile(*args.logdir+host, output)
+		} else {
+			mutex.Lock()
+			os.Stdin.Write([]byte(output))
+			mutex.Unlock()
+		}
+		return
+	}
+
+	if !*args.strictmode {
+		for _, cmd := range cmds {
+			o, err := device.ExecCommand(cmd)
+			if err != nil {
+				log.Printf("[%s]Failed exec cmd '%s'. Error: %v", host, cmd, err)
+				output += o
+				if *args.logdir != "" {
+					writefile(*args.logdir+host, output)
+				} else {
+					mutex.Lock()
+					os.Stdin.Write([]byte(output))
+					mutex.Unlock()
+				}
+				return
+			}
+
+			time.Sleep(time.Second * *args.cmdinterval)
+		}
+
+		if *args.logdir != "" {
+			writefile(*args.logdir+host, output)
+		} else {
+			mutex.Lock()
+			os.Stdin.Write([]byte(output))
+			mutex.Unlock()
+		}
+		return
+	}
+
 }
 
 func main() {
