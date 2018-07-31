@@ -166,15 +166,15 @@ func guessVendor(s *nwssh.SSHBase, banner string) string {
 		if vendor = guessVendorByBanner(banner); vendor == "" {
 
 			resp, _ := s.ExecCommand(`show version | in Ruij`)
-			if strings.Contains(rsp, "Ruijie") {
+			if strings.Contains(resp, "Ruijie") {
 				return "RUIJIE"
 			}
 
 			resp, _ = s.ExecCommand(`show version | in Software`)
-			if strings.Contains(rsp, "Nexus") {
+			if strings.Contains(resp, "Nexus") {
 				return "NEXUS"
 			}
-			if strings.Contains(rsp, "Cisco") {
+			if strings.Contains(resp, "Cisco") {
 				return "CISCO"
 			}
 
