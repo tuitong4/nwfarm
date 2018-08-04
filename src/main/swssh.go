@@ -81,10 +81,10 @@ filename will used as target hostname.`)
 
 	flag.StringVar(&args.privatekey, "pkey", "", `Private key used to login on devie.`)
 
-	flag.StringVar(&args.cmdtimeout, "cmdtimeout", 10, `Waiting time when exec command expect prompt, if timeout reached, 
+	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `Waiting time when exec command expect prompt, if timeout reached, 
 return the respone and ignore the prompt.`)
 
-	flag.StringVar(&args.cmdinterval, "cmdinterval", 2, `The interval between execution of two commands.`)
+	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, `The interval between execution of two commands.`)
 
 	flag.Parse()
 
@@ -195,7 +195,7 @@ func guessVendor(s *nwssh.SSHBase, banner string) string {
 func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Args) {
 	var banner string
 	var devssh nwssh.SSHBase
-	vendor := *args.swvendor
+	vendor := args.swvendor
 	if vendor == "" {
 		sshoptions.BannerCallback = func(message string) error {
 			banner = message
@@ -203,7 +203,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		}
 	}
 
-	devssh = nwssh.SSH{host, port, *args.username, *args.password, *args.timeout * time.Second, sshoptions}
+	devssh = nwssh.SSH{host, port, args.username, args.password, time.Duration(args.timeout) * time.Second, sshoptions}
 
 	if err := devssh.Connect(); err != nil {
 		log.Printf("[%s]%v\n", host, err)
