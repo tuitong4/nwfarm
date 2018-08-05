@@ -34,6 +34,7 @@ type Args struct {
 	privatekey   string
 	prettyoutput bool
 	help		 bool
+	nopage		 bool
 }
 
 var args = Args{}
@@ -74,7 +75,8 @@ end the wait. In Millisecond.`)
 means execution is failed.`)
 	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, 	`The interval to send command to remotely host.`)
 	flag.BoolVar(&args.prettyoutput, "pretty", false, 	`Strip the command line and device prompt of the respone output.`)
-	flag.BoolVar(&args.help, "help", false, 	`Usage of CLI.`)
+	flag.BoolVar(&args.help, "help", false, 		`Usage of CLI.`)
+	flag.BoolVar(&args.nopage, "nopage", true, 	`Disable enter "SPACE" to show more output line.`)
 
 	flag.Parse()
 }
@@ -213,6 +215,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		return
 	}
 
+
 	if vendor == "" {
 		vendor = guessVendor(devssh, banner)
 		if vendor == "" {
@@ -222,8 +225,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	}
 
 	var device nwssh.SSHBASE
-
-	 if vendor == "H3C" {
+	if vendor == "H3C" {
 		device = &nwssh.H3cSSH{devssh}
 	} else if vendor == "HUAWEI" {
 		device = &nwssh.HuaweiSSH{devssh}
@@ -235,6 +237,8 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		device = &nwssh.RuijieSSH{devssh}
 	}
 
+
+
 	if len(cmds) == 0 {
 		cmds = basiscmd[vendor]
 	}
@@ -242,7 +246,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	var output string
 	var mutex sync.Mutex
 	if args.strictmode && len(cmds) > 0 {
-		if !device.SessionPreparation(){
+		if args.nopage && !device.SessionPreparation(){
 			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
 		}
 		for _, cmd := range cmds {
@@ -260,6 +264,9 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	}
 
 	if !args.strictmode && len(cmds) > 0 {
+		if args.nopage && !device.SessionPreparation(){
+			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
+		}
 		for _, cmd := range cmds {
 			o, err := device.ExecCommand(cmd)
 			if args.prettyoutput{
