@@ -61,7 +61,7 @@ automatically.`)
 	flag.BoolVar(&args.saveconfig, "save", false, 		"Automatically save running-config after finished execution.")
 	flag.BoolVar(&args.strictmode, "strict", false, 	`Execute command using strict mode, host's prompt is expected to 
 confirm command was successfully executed until timeout reached.
-This is not recommand when it's requried enter 'Y/N'to confirm 
+This is not recommand when it's requried enter 'Y/N' to confirm 
 execution.`)
 	flag.IntVar(&args.timeout, "timeout", 10, 			"SSH connection timeout in seconds.")
 	flag.IntVar(&args.readwaittime, "readwaittime", 500,`The time to wait ssh channel return the respone, if time reached,
@@ -74,7 +74,7 @@ end the wait. In Millisecond.`)
 means execution is failed.`)
 	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, 	`The interval to send command to remotely host.`)
 	flag.BoolVar(&args.prettyoutput, "pretty", false, 	`Strip the command line and device prompt of the respone output.`)
-	flag.BoolVar(&args.help, "h", false, 	`Usage of CLI.`)
+	flag.BoolVar(&args.help, "help", false, 	`Usage of CLI.`)
 
 	flag.Parse()
 }
