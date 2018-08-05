@@ -18,13 +18,14 @@ const MaxBuffer = 1024 * 10
 
 type SSHBASE interface {
 	Connect() error
-	Close() error
+	Close()
 	SessionPreparation() bool
 	ExecCommand(string) (string, error)
 	ExecCommandTiming(string, time.Duration) (string, error)
-	ExecCommandExpect(string, string, time.Duration) (string, time.Duration)
-	ExecCommandExpectPrompt(string, time.Duration) (string, time.Duration)
+	ExecCommandExpect(string, string, time.Duration) (string, error)
+	ExecCommandExpectPrompt(string, time.Duration) (string, error)
 	SaveRuningConfig() bool
+	RunTranscation(string) (string, error)
 }
 
 type SSHBase struct {
@@ -450,3 +451,4 @@ func (s *SSHBase) ExecCommandExpectPrompt(cmd string, timeout time.Duration) (re
 	respone, err = s.readChannelExpectPrompt(timeout)
 	return
 }
+

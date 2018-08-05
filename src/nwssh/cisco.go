@@ -1,8 +1,8 @@
 package nwssh
 
 import (
-	"log"
 	"time"
+	"errors"
 )
 
 type NexusSSH struct {
@@ -29,10 +29,26 @@ func (s *NexusSSH) SaveRuningConfig() bool {
 	_, err := s.ExecCommandExpectPrompt("copy running-config startup-config", time.Second*20)
 
 	if err != nil {
-		log.Fatalf("%v", err)
 		return false
 	}
 	return true
+}
+
+func (s *NexusSSH) InterfaceConfig() (string, error) {
+	resp, err := s.ExecCommand("show run interface")
+	if err != nil {
+		return "", err
+	}
+	return resp, err
+}
+
+
+func (s *NexusSSH) RunTranscation(trans string) (string, error){
+	if trans == "ifconfig"{
+		return s.InterfaceConfig()
+	}
+
+	return "", errors.New("Unsupport transcation!")
 }
 
 type CiscoSSH struct {
@@ -58,14 +74,29 @@ func (s *CiscoSSH) SaveRuningConfig() bool {
 	_, err := s.ExecCommandExpect("copy running-config startup-config", "]?", time.Second*5)
 
 	if err != nil {
-		log.Fatalf("%v", err)
 		return false
 	}
 	_, err = s.ExecCommandExpectPrompt("", time.Second*20)
 
 	if err != nil {
-		log.Fatalf("%v", err)
 		return false
 	}
 	return true
+}
+
+func (s *CiscoSSH) InterfaceConfig() (string, error) {
+	resp, err := s.ExecCommand("show running")
+	if err != nil {
+		return "", err
+	}
+	return resp, err
+}
+
+
+func (s *CiscoSSH) RunTranscation(trans string) (string, error){
+	if trans == "ifconfig"{
+		return s.InterfaceConfig()
+	}
+
+	return "", errors.New("Unsupport transcation!")
 }

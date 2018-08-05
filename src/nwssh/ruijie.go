@@ -3,6 +3,7 @@ package nwssh
 import (
 	"log"
 	"time"
+	"errors"
 )
 
 type RuijieSSH struct {
@@ -33,4 +34,21 @@ func (s *RuijieSSH) SaveRuningConfig() bool {
 		return false
 	}
 	return true
+}
+
+func (s *RuijieSSH) InterfaceConfig() (string, error) {
+	resp, err := s.ExecCommand("show running")
+	if err != nil {
+		return "", err
+	}
+	return resp, err
+}
+
+
+func (s *RuijieSSH) RunTranscation(trans string) (string, error){
+	if trans == "ifconfig"{
+		return s.InterfaceConfig()
+	}
+
+	return "", errors.New("Unsupport transcation!")
 }

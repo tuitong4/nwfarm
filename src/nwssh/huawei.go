@@ -1,8 +1,8 @@
 package nwssh
 
 import (
-	"log"
 	"time"
+	"errors"
 )
 
 type HuaweiSSH struct {
@@ -28,14 +28,29 @@ func (s *HuaweiSSH) SaveRuningConfig() bool {
 	_, err := s.ExecCommandExpect("save", "[Y/N]:", time.Second*5)
 
 	if err != nil {
-		log.Fatalf("%v", err)
 		return false
 	}
 	_, err = s.ExecCommandExpectPrompt("y", time.Second*5)
 
 	if err != nil {
-		log.Fatalf("%v", err)
 		return false
 	}
 	return true
+}
+
+func (s *HuaweiSSH) InterfaceConfig() (string, error) {
+	resp, err := s.ExecCommand("display cu interface")
+	if err != nil {
+		return "", err
+	}
+	return resp, err
+}
+
+
+func (s *HuaweiSSH) RunTranscation(trans string) (string, error){
+	if trans == "ifconfig"{
+		return s.InterfaceConfig()
+	}
+
+	return "", errors.New("Unsupport transcation!")
 }
