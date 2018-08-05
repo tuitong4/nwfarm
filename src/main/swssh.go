@@ -242,6 +242,9 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	var output string
 	var mutex sync.Mutex
 	if args.strictmode && len(cmds) > 0 {
+		if !device.SessionPreparation(){
+			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
+		}
 		for _, cmd := range cmds {
 			o, err := device.ExecCommandExpectPrompt(cmd, time.Second*time.Duration(args.cmdtimeout))
 			if args.prettyoutput == true{
@@ -304,15 +307,18 @@ func main() {
 		os.Exit(0)
 	}
 	if args.host == "" && args.hostfile == "" && args.conffiledir == "" {
-		log.Fatal("Traget host is expected but got none. See help docs.")
+		fmt.Println("Traget host is expected but got none. See help docs.")
+		os.Exit(0)
 	}
 
 	if args.username == "" {
-		log.Fatal("Username is expected but got none. See help docs.")
+		fmt.Println("Username is expected but got none. See help docs.")
+		os.Exit(0)
 	}
 
 	if args.password == "" {
-		log.Fatal("Password is expected but got none. See help docs.")
+		fmt.Println("Password is expected but got none. See help docs.")
+		os.Exit(0)
 	}
 
 	sshoptions := nwssh.SSHOptions{
@@ -344,7 +350,7 @@ func main() {
 			if !f.IsDir() && len(strings.Split(host, ".")) != 4 {
 				cmds, err = readlines(host)
 				if err != nil {
-					log.Printf("Fialed to read command from configuration file.\n")
+					fmt.Println("Fialed to read command from configuration file.")
 				}
 				wait.Add(1)
 				go func(host string, cmds []string) {
