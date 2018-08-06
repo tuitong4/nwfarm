@@ -133,23 +133,6 @@ func guessVendorByWelecomInfo(welecominfo string) string {
 	return ""
 }
 
-var VersionInfoVendorKeys map[string]string = map[string]string{
-	"H3C":    "H3C",
-	"HUAWEI": "HUAWEI",
-	"NEXUS":  "Nexus",
-	"CISCO":  "Cisco IOS",
-	"RUIJIE": "Ruijie",
-}
-
-func guessVendorByVesionInfo(versioninfo string) string {
-	for k, v := range WelecomInfoVendorKeys {
-		if strings.Contains(versioninfo, v) {
-			return k
-		}
-	}
-	return ""
-}
-
 func guessVendor(s *nwssh.SSHBase, banner string) string {
 	if s.WelecomInfo == "" {
 		time.Sleep(time.Second * 1)
