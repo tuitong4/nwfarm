@@ -51,7 +51,8 @@ For example:
 	test.cmd.nexus
 	test.cmd.h3c
 	test.cmd.huawei
-	test.cmd.ruijie, 'test' is the prefix.`)
+	test.cmd.ruijie 
+'test' is the prefix.`)
 	flag.StringVar(&args.cmd, "cmd", "", 				`The command(s) to be executed remotely. Multiple commands are 
 supported when used ';' as dilimiter.`)
 	flag.StringVar(&args.swvendor, "V", "", 			`Vendor of target host, if not spicified, it will be checked 
