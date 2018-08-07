@@ -73,7 +73,7 @@ end the wait. In Millisecond.`)
 	flag.StringVar(&args.privatekey, "pkey", "", 		`Private key used for login, if spicified, it'll ignore password.`)
 	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, 	`The wait time for executing commands remotely, if timeout reached, 
 means execution is failed.`)
-	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, 	`The interval to send command to remotely host.`)
+	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, 	`The interval of sending command to remotely host.`)
 	flag.BoolVar(&args.prettyoutput, "pretty", false, 	`Strip the command line and device prompt of the respone output.`)
 	flag.BoolVar(&args.help, "help", false, 		`Usage of CLI.`)
 	flag.BoolVar(&args.nopage, "nopage", true, 	`Disable enter "SPACE" to show more output line.`)
@@ -283,6 +283,9 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	}
 
 	if args.transcation != "" {
+		if args.nopage && !device.SessionPreparation(){
+			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
+		}
 		output, err = device.RunTranscation(args.transcation)
 		if err != nil {
 			log.Printf("[%s]Failed exec transcation '%s'. Error: %v", host, args.transcation, err)
