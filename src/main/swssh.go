@@ -355,7 +355,7 @@ func main() {
 		}
 		for _, f := range fileinfo {
 			host := f.Name()
-			fmt.Println(f.IsDir())
+
 			if !f.IsDir() && len(strings.Split(host, ".")) == 4 {
 				cmds, err = readlines(args.conffiledir + host)
 				if err != nil {
