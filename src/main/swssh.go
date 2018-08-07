@@ -196,7 +196,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	var banner string
 	var devssh *nwssh.SSHBase
 	var err error
-	vendor := args.swvendor
+	vendor := strings.ToUpper(args.swvendor)
 	if vendor == "" {
 		sshoptions.BannerCallback = func(message string) error {
 			banner = message
