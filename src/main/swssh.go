@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"nwssh"
@@ -10,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"fmt"
 )
 
 type Args struct {
@@ -33,19 +33,19 @@ type Args struct {
 	transcation  string
 	privatekey   string
 	prettyoutput bool
-	help		 bool
-	nopage		 bool
+	help         bool
+	nopage       bool
 }
 
 var args = Args{}
 
 func initflag() {
-	flag.StringVar(&args.hostfile, "f", "", 			`Target hosts list file, one ip on a separate line, for example:
+	flag.StringVar(&args.hostfile, "f", "", `Target hosts list file, one ip on a separate line, for example:
 '10.10.10.10'
 '12.12.12.12'.`)
-	flag.StringVar(&args.host, "host", "", 				`Target host, ip address is expect. Multiple hosts are supported 
+	flag.StringVar(&args.host, "host", "", `Target host, ip address is expect. Multiple hosts are supported 
 when used ';' as dilimiter.`)
-	flag.StringVar(&args.cmdprefix, "cmd_prefix", "", 	`A prefix of command list file. 
+	flag.StringVar(&args.cmdprefix, "cmd_prefix", "", `A prefix of command list file. 
 For example:
 	test.cmd.cisco
 	test.cmd.nexus
@@ -53,35 +53,34 @@ For example:
 	test.cmd.huawei
 	test.cmd.ruijie 
 'test' is the prefix.`)
-	flag.StringVar(&args.cmd, "cmd", "", 				`The command(s) to be executed remotely. Multiple commands are 
+	flag.StringVar(&args.cmd, "cmd", "", `The command(s) to be executed remotely. Multiple commands are 
 supported when used ';' as dilimiter.`)
-	flag.StringVar(&args.swvendor, "V", "", 			`Vendor of target host, if not spicified, it will be checked 
+	flag.StringVar(&args.swvendor, "V", "", `Vendor of target host, if not spicified, it will be checked 
 automatically.`)
-	flag.StringVar(&args.username, "u", "", 			"Username for login.")
-	flag.StringVar(&args.password, "p", "", 			"Password for login.")
-	flag.StringVar(&args.port, "port", "22", 			"Target SSH port to connect.")
-	flag.BoolVar(&args.saveconfig, "save", false, 		"Automatically save running-config after finished execution.")
-	flag.BoolVar(&args.strictmode, "strict", false, 	`Execute command using strict mode, host's prompt is expected to 
+	flag.StringVar(&args.username, "u", "", "Username for login.")
+	flag.StringVar(&args.password, "p", "", "Password for login.")
+	flag.StringVar(&args.port, "port", "22", "Target SSH port to connect.")
+	flag.BoolVar(&args.saveconfig, "save", false, "Automatically save running-config after finished execution.")
+	flag.BoolVar(&args.strictmode, "strict", false, `Execute command using strict mode, host's prompt is expected to 
 confirm command was successfully executed until timeout reached.
 This is not recommand when it's requried enter 'Y/N' to confirm 
 execution.`)
-	flag.IntVar(&args.timeout, "timeout", 10, 			"SSH connection timeout in seconds.")
-	flag.IntVar(&args.readwaittime, "readwaittime", 500,`The time to wait ssh channel return the respone, if time reached,
+	flag.IntVar(&args.timeout, "timeout", 10, "SSH connection timeout in seconds.")
+	flag.IntVar(&args.readwaittime, "readwaittime", 500, `The time to wait ssh channel return the respone, if time reached,
 end the wait. In Millisecond.`)
-	flag.StringVar(&args.logdir, "logpath", "", 		"Log command output to /<path>/<ip_addr> instead of stdout.")
-	flag.StringVar(&args.conffiledir, "confpath", "", 	`Configuration file path, filename will be used as target hostname.`)
-	flag.StringVar(&args.transcation, "tran", "", 		`Run a defined transcation such as get 'ifconifg', 'bgpneighbors'.`)
-	flag.StringVar(&args.privatekey, "pkey", "", 		`Private key used for login, if spicified, it'll ignore password.`)
-	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, 	`The wait time for executing commands remotely, if timeout reached, 
+	flag.StringVar(&args.logdir, "logpath", "", "Log command output to /<path>/<ip_addr> instead of stdout.")
+	flag.StringVar(&args.conffiledir, "confpath", "", `Configuration file path, filename will be used as target hostname.`)
+	flag.StringVar(&args.transcation, "tran", "", `Run a defined transcation such as get 'ifconifg', 'bgpneighbors'.`)
+	flag.StringVar(&args.privatekey, "pkey", "", `Private key used for login, if spicified, it'll ignore password.`)
+	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `The wait time for executing commands remotely, if timeout reached, 
 means execution is failed.`)
-	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, 	`The interval of sending command to remotely host.`)
-	flag.BoolVar(&args.prettyoutput, "pretty", false, 	`Strip the command line and device prompt of the respone output.`)
-	flag.BoolVar(&args.help, "help", false, 		`Usage of CLI.`)
-	flag.BoolVar(&args.nopage, "nopage", true, 	`Disable enter "SPACE" to show more output line.`)
+	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, `The interval of sending command to remotely host.`)
+	flag.BoolVar(&args.prettyoutput, "pretty", false, `Strip the command line and device prompt of the respone output.`)
+	flag.BoolVar(&args.help, "help", false, `Usage of CLI.`)
+	flag.BoolVar(&args.nopage, "nopage", true, `Disable enter "SPACE" to show more output line.`)
 
 	flag.Parse()
 }
-
 
 func readlines(filename string) ([]string, error) {
 	file, err := os.Open(filename)
@@ -216,7 +215,6 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		return
 	}
 
-
 	if vendor == "" {
 		vendor = guessVendor(devssh, banner)
 		if vendor == "" {
@@ -238,8 +236,6 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		device = &nwssh.RuijieSSH{devssh}
 	}
 
-
-
 	if len(cmds) == 0 {
 		cmds = basiscmd[vendor]
 	}
@@ -247,12 +243,12 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	var output string
 	var mutex sync.Mutex
 	if args.strictmode && len(cmds) > 0 {
-		if args.nopage && !device.SessionPreparation(){
+		if args.nopage && !device.SessionPreparation() {
 			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
 		}
 		for _, cmd := range cmds {
 			o, err := device.ExecCommandExpectPrompt(cmd, time.Second*time.Duration(args.cmdtimeout))
-			if args.prettyoutput == true{
+			if args.prettyoutput == true {
 				o = nwssh.SanitizeRespone(o, true, true)
 			}
 			output += o
@@ -265,12 +261,12 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	}
 
 	if !args.strictmode && len(cmds) > 0 {
-		if args.nopage && !device.SessionPreparation(){
+		if args.nopage && !device.SessionPreparation() {
 			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
 		}
 		for _, cmd := range cmds {
 			o, err := device.ExecCommand(cmd)
-			if args.prettyoutput{
+			if args.prettyoutput {
 				o = nwssh.SanitizeRespone(o, true, true)
 			}
 			output += o
@@ -284,7 +280,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	}
 
 	if args.transcation != "" {
-		if args.nopage && !device.SessionPreparation(){
+		if args.nopage && !device.SessionPreparation() {
 			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
 		}
 		output, err = device.RunTranscation(args.transcation)
@@ -293,7 +289,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		}
 	}
 
-	if args.saveconfig{
+	if args.saveconfig {
 		if !device.SaveRuningConfig() {
 			log.Printf("[%s]Failed save configuration.", host)
 		}
@@ -312,7 +308,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 
 func main() {
 	initflag()
-	if args.help{
+	if args.help {
 		fmt.Println("Usage of CLI:")
 		flag.PrintDefaults()
 		os.Exit(0)
@@ -354,12 +350,14 @@ func main() {
 	if args.conffiledir != "" {
 		fileinfo, err := ioutil.ReadDir(args.conffiledir)
 		if err != nil {
-			log.Fatal("%v", err)
+			fmt.Println(err)
+			os.Exit(0)
 		}
 		for _, f := range fileinfo {
 			host := f.Name()
-			if !f.IsDir() && len(strings.Split(host, ".")) != 4 {
-				cmds, err = readlines(host)
+			fmt.Println(f.IsDir())
+			if !f.IsDir() && len(strings.Split(host, ".")) == 4 {
+				cmds, err = readlines(args.conffiledir + host)
 				if err != nil {
 					fmt.Println("Fialed to read command from configuration file.")
 				}
@@ -396,7 +394,7 @@ func main() {
 			"RUIJIE": nil,
 		}
 		for k, _ := range basiscmd {
-			cmds, err = readlines(args.cmdprefix + "." + strings.ToLower(k))
+			cmds, err = readlines(args.cmdprefix + ".cmd." + strings.ToLower(k))
 			if err == nil {
 				basiscmd[k] = cmds
 			}
