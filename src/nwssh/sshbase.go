@@ -280,20 +280,24 @@ READEND:
 func (s *SSHBase) readChannelExpectPrompt(timeout time.Duration) (respone string, err error) {
 	// Expect string or break until timeout reached.
 	respone = ""
+	catchrespone := false
 	timer := time.NewTimer(timeout)
 READEND:
 	for {
 		select {
 		case resp := <-s.respchan:
 			respone += normalizeLineFeeds(resp)
+			catchrespone = true
 		case <-timer.C:
 			err = fmt.Errorf("Timed-out reading channel, prompt not found in output.")
 			break READEND
 		default:
-			lines := strings.Split(strings.TrimSpace(respone), "\n")
-			if len_lines := len(lines); len_lines > 1 {
-				if findPrompt(lines[len_lines-1]) {
-					break READEND
+			if catchrespone {
+				lines := strings.Split(strings.TrimSpace(respone), "\n")
+				if len_lines := len(lines); len_lines >= 1 {
+					if findPrompt(lines[len_lines-1]) {
+						break READEND
+					}
 				}
 			}
 		}
@@ -451,4 +455,3 @@ func (s *SSHBase) ExecCommandExpectPrompt(cmd string, timeout time.Duration) (re
 	respone, err = s.readChannelExpectPrompt(timeout)
 	return
 }
-
