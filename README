@@ -3,10 +3,10 @@ Simple Switch CLI Execution Script.
 Usage of swssh:
   -V string
         交换机厂商，支持H3C、HUAWEI、CISCO（代表catalyst系列）、NEXUS、RUIJIE。如果不指定，
-        会自动检测，在配置的设备是相同产生的时候建议指定，因为检查会浪费时间而且有可能检查不出来。
+        会自动检测，在配置的设备是相同厂商的时候建议指定，因为检查会浪费时间而且有可能检查失败。
 
   -cmd string
-        执行的命令，多条命了使用“;”分隔。
+        执行的命令，多条命了使用“;”分隔。尽量不要带对于的无用字符，如"#"、""等等。
 
   -cmd_prefix string
         配置命令前缀，主要是提供不同厂商的设备配置相同功能的命令时候使用。前缀如下，test就是前缀。
@@ -18,7 +18,7 @@ Usage of swssh:
                 test.cmd.ruijie
 
   -cmdinterval
-        执行命令的间隔时间，当且仅当在不检查命令是否成功执行的时候使用，即不使用strict模式。(default 2s)
+        执行命令的间隔时间，当且仅当在不检查命令是否成功执行的时候使用，即不使用-strict模式。默认2s。
 
   -cmdtimeout
         等待执行命令完成的超时时间。有些命令执行较慢，所以要等待较长的时间，超时则认为执行失败。则默认10s。
@@ -69,7 +69,26 @@ Usage of swssh:
         SSH链接超时时间，默认10s。
 
   -tran
-        事务。指的是已经定义的好的一组操作。目前只实现了一个查看接口配置。使用-tran ifconfig执行。
+        事务。指的是已经定义的好的一组操作。目前只实现了一个查看接口配置。使用-tran ifconfig 执行。
 
   -u
         用户名。
+
+
+示例：
+swssh -u username -p password -host 172.28.6.1 -cmd "vlan 100" -save
+
+swssh -u username -p password -host 172.28.6.1 -tran ifconfig
+
+swssh -u username -p password -host 172.28.6.1 -cmd_prefix ./swcmd/bond4 -strict
+
+swssh -u username -p password -host 172.28.6.1 -cmd "display clock;display version" -pretty
+
+swssh -u username -p password -host 172.28.6.1 -cmd "display version" -strict -nopage=false
+
+swssh -u username -p password -host 172.28.6.1 -cmd "display clock;display version" -logpath /var/log/swlog/
+
+swssh -u username -p password -f ./deviceip -cmd "dis version"
+
+swssh -u username -p password -confpath ./cmdfile/ -logpath /var/log/swlog/
+
