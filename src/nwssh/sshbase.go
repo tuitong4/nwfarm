@@ -138,7 +138,7 @@ func (s *SSHBase) Connect() error {
 	}
 	client, err := ssh.Dial("tcp", s.host+":"+s.port, s.sshconfig)
 	if err != nil {
-		return fmt.Errorf("Unable to connect to remote host: %v", err)
+		return fmt.Errorf("%v", err)
 	}
 
 	sess, err := client.NewSession()
