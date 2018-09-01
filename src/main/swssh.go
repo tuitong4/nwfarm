@@ -281,7 +281,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 
 	if args.transcation != "" {
 		if args.nopage && !device.SessionPreparation() {
-			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
+			log.Printf("[%s]Failed init executable envirment. Try to exectue commands directly.", host)
 		}
 		output, err = device.RunTranscation(args.transcation)
 		if err != nil {
