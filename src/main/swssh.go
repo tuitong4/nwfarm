@@ -303,7 +303,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		mutex.Unlock()
 	}
 
-	log.Printf("[%s]Finished execution!\n", host)
+	log.Printf("[%s]\tFinished execution!\n", host)
 }
 
 func main() {
