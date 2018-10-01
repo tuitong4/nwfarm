@@ -303,7 +303,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		mutex.Unlock()
 	}
 
-	log.Printf("[%s]\tFinished execution!\n", host)
+	log.Printf("[%s]Finished execution!\n", host)
 }
 
 func main() {
@@ -324,8 +324,8 @@ func main() {
 	}
 
 	if args.password == "" {
-		fmt.Println("Password is expected but got none. See help docs.")
-		os.Exit(0)
+		fmt.Printf("Please input the password:")
+		fmt.Scanf("%s", &args.password)
 	}
 
 	sshoptions := nwssh.SSHOptions{
