@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"nwssh"
@@ -106,32 +107,27 @@ func main() {
 		log.Fatal("%v", err)
 	}
 
-	for {
-		maxThread := 500
-		threadchan := make(chan struct{}, maxThread)
-		result := make([]string, 1, 1)
-		wait := sync.WaitGroup{}
+	maxThread := 500
+	threadchan := make(chan struct{}, maxThread)
+	result := make([]string, 1, 1)
+	wait := sync.WaitGroup{}
 
-		for _, host := range hosts {
-			wait.Add(1)
-			go func(host string) {
-				threadchan <- struct{}{}
-				if run(host, "22", sshoptions, cmds) {
-					result = append(result, host)
-				}
-				<-threadchan
-				wait.Done()
-			}(host)
-		}
-		wait.Wait()
-
-		if result != nil {
-			var output string
-			for _, v := range result {
-				output += v + "\n"
+	for _, host := range hosts {
+		wait.Add(1)
+		go func(host string) {
+			threadchan <- struct{}{}
+			if run(host, "22", sshoptions, cmds) {
+				result = append(result, host)
 			}
-			writefile("/tmp/h3ceccoutput", output)
+			<-threadchan
+			wait.Done()
+		}(host)
+	}
+	wait.Wait()
+
+	if len(result) == 0 {
+		for _, v := range result {
+			fmt.Println(v)
 		}
-		time.Sleep(time.Duration(24) * time.Hour)
 	}
 }
