@@ -1,4 +1,4 @@
-package test
+package main
 
 import (
 	"bufio"
@@ -92,7 +92,12 @@ func main() {
 		ReadWaitTime: time.Duration(500) * time.Millisecond, //Read data from a ssh channel timeout
 	}
 
-	var cmds []string
+	cmds := []string{"system",
+		"probe",
+		"local log slot 1 display sdk",
+		"local log slot 1 display 30 sdk",
+		"local log slot 1 display 60 sdk",
+		"local log slot 1 display 90 sdk"}
 	var err error
 
 	hostfile := "/root/s6800hosts"
@@ -104,7 +109,7 @@ func main() {
 	for {
 		maxThread := 500
 		threadchan := make(chan struct{}, maxThread)
-		result := make([]string, 2, 1)
+		result := make([]string, 1, 1)
 		wait := sync.WaitGroup{}
 
 		for _, host := range hosts {
