@@ -394,9 +394,9 @@ func main() {
 			"RUIJIE": nil,
 		}
 		for k, _ := range basiscmd {
-			cmds, err = readlines(args.cmdprefix + ".cmd." + strings.ToLower(k))
+			cmds_t, err := readlines(args.cmdprefix + ".cmd." + strings.ToLower(k))
 			if err == nil {
-				basiscmd[k] = cmds
+				basiscmd[k] = cmds_t
 			}
 		}
 	}
