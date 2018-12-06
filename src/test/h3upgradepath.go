@@ -2,18 +2,16 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"nwssh"
 	"os"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
 
-func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string) bool {
+func run(host, port string, sshoptions nwssh.SSHOptions) (string, bool) {
 
 	var devssh *nwssh.SSHBase
 	var err error
@@ -25,37 +23,47 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string) bool {
 	defer devssh.Close()
 	if err != nil {
 		log.Printf("[%s]%v\n", host, err)
-		return false
+		return "", false
 	}
 	if err = devssh.Connect(); err != nil {
 		log.Printf("[%s]%v\n", host, err)
-		return false
+		return "", false
 	}
 
 	var device nwssh.SSHBASE
 
 	device = &nwssh.H3cSSH{devssh}
 
-	key_regrex := regexp.MustCompile("MMU ERR")
-
 	if !device.SessionPreparation() {
 		log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
 	}
-	for _, cmd := range cmds {
-		o, err := device.ExecCommand(cmd)
-		if err != nil {
-			log.Printf("[%s]Failed exec cmd '%s'. Error: %v", host, cmd, err)
-			log.Printf("[%s]Exit execution!\n", host)
-			break
-		}
-		if key_regrex.MatchString(o) {
-			return true
-		}
-		time.Sleep(time.Second * time.Duration(1))
+
+	upgrade_cmd := `install activate patch flash:/S6800-CMW710-SYSTEM-R2609H17.bin all`
+	output := ""
+	o, err := device.ExecCommandExpect(upgrade_cmd, "[Y/N]", time.Second*5)
+	if err != nil {
+		log.Printf("[%s]%v\n", host, err)
+		return output + o, false
 	}
-
-	return false
-
+	output += o
+	device.ExecCommandExpect("Y", "assword:", time.Second*5)
+	if err != nil {
+		log.Printf("[%s]%v\n", host, err)
+		return output + o, false
+	}
+	output += o
+	o, err = device.ExecCommandTiming("Y", time.Second*120)
+	if err != nil {
+		log.Printf("[%s]%v\n", host, err)
+		return output + o, false
+	}
+	o, err = device.ExecCommandTiming("install commit", time.Second*120)
+	if err != nil {
+		log.Printf("[%s]%v\n", host, err)
+		return output + o, false
+	}
+	output += o
+	return output, false
 }
 
 func readlines(filename string) ([]string, error) {
@@ -93,15 +101,9 @@ func main() {
 		ReadWaitTime: time.Duration(500) * time.Millisecond, //Read data from a ssh channel timeout
 	}
 
-	cmds := []string{"system",
-		"probe",
-		"local log slot 1 display sdk",
-		"local log slot 1 display 30 sdk",
-		"local log slot 1 display 60 sdk",
-		"local log slot 1 display 90 sdk"}
 	var err error
 
-	hostfile := "/root/s6800hosts"
+	hostfile := "./hosts"
 	hosts, err := readlines(hostfile)
 	if err != nil {
 		log.Fatal("%v", err)
@@ -109,25 +111,19 @@ func main() {
 
 	maxThread := 500
 	threadchan := make(chan struct{}, maxThread)
-	result := make([]string, 1, 1)
+
 	wait := sync.WaitGroup{}
 
 	for _, host := range hosts {
 		wait.Add(1)
 		go func(host string) {
 			threadchan <- struct{}{}
-			if run(host, "22", sshoptions, cmds) {
-				result = append(result, host)
-			}
+			output, _ := run(host, "22", sshoptions)
+			writefile("./out/"+host, output)
 			<-threadchan
 			wait.Done()
 		}(host)
 	}
 	wait.Wait()
 
-	if len(result) == 0 {
-		for _, v := range result {
-			fmt.Println(v)
-		}
-	}
 }
