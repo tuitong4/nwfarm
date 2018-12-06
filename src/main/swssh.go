@@ -30,6 +30,7 @@ type Args struct {
 	cmdinterval  int
 	logdir       string
 	conffiledir  string
+	cmdfile      string
 	transcation  string
 	privatekey   string
 	prettyoutput bool
@@ -70,6 +71,7 @@ execution.`)
 end the wait. In Millisecond.`)
 	flag.StringVar(&args.logdir, "logpath", "", "Log command output to /<path>/<ip_addr> instead of stdout.")
 	flag.StringVar(&args.conffiledir, "confpath", "", `Configuration file path, filename will be used as target hostname.`)
+	flag.StringVar(&args.cmdfile, "cmdfile", "", `The file includes commands.`)
 	flag.StringVar(&args.transcation, "tran", "", `Run a defined transcation such as get 'ifconifg', 'bgpneighbors'.`)
 	flag.StringVar(&args.privatekey, "pkey", "", `Private key used for login, if spicified, it'll ignore password.`)
 	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `The wait time for executing commands remotely, if timeout reached, 
@@ -398,6 +400,12 @@ func main() {
 			if err == nil {
 				basiscmd[k] = cmds_t
 			}
+		}
+	} else if args.cmdfile != "" {
+		cmds, err = readlines(args.cmdfile)
+		if err != nil {
+			log.Printf("%v\n", err)
+			os.Exit(0)
 		}
 	}
 
