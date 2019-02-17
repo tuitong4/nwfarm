@@ -1,8 +1,8 @@
 package nwssh
 
 import (
-	"time"
 	"errors"
+	"time"
 )
 
 type H3cSSH struct {
@@ -40,9 +40,8 @@ func (s *H3cSSH) InterfaceConfig() (string, error) {
 	return resp, err
 }
 
-
-func (s *H3cSSH) RunTranscation(trans string) (string, error){
-	if trans == "ifconfig"{
+func (s *H3cSSH) RunTranscation(trans string) (string, error) {
+	if trans == "ifconfig" {
 		return s.InterfaceConfig()
 	}
 

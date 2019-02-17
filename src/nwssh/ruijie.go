@@ -1,9 +1,9 @@
 package nwssh
 
 import (
+	"errors"
 	"log"
 	"time"
-	"errors"
 )
 
 type RuijieSSH struct {
@@ -44,9 +44,8 @@ func (s *RuijieSSH) InterfaceConfig() (string, error) {
 	return resp, err
 }
 
-
-func (s *RuijieSSH) RunTranscation(trans string) (string, error){
-	if trans == "ifconfig"{
+func (s *RuijieSSH) RunTranscation(trans string) (string, error) {
+	if trans == "ifconfig" {
 		return s.InterfaceConfig()
 	}
 
