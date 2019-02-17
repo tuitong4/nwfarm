@@ -1,4 +1,4 @@
-package nwnet
+package iptool
 
 import (
 	"net"
