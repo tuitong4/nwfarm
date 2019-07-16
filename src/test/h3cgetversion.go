@@ -8,17 +8,17 @@ import (
 	"log"
 	"nwssh"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
 
 type Args struct {
-	hostfile  string
-	username  string
-	password  string
-	patchname string
-	logdir    string
+	hostfile string
+	username string
+	password string
+	logdir   string
 }
 
 var args = Args{}
@@ -29,12 +29,11 @@ func initflag() {
 '12.12.12.12'.`)
 	flag.StringVar(&args.username, "u", "", "Username for login.")
 	flag.StringVar(&args.password, "p", "", "Password for login.")
-	flag.StringVar(&args.patchname, "file", "", "Filename to upload.")
 	flag.StringVar(&args.logdir, "logpath", "", "Log command output to /<path>/<ip_addr> instead of stdout.")
 	flag.Parse()
 }
 
-func run(host, port string, sshoptions nwssh.SSHOptions, args Args) (string, bool) {
+func run(host, port string, sshoptions nwssh.SSHOptions, args Args) (string, string, bool) {
 
 	var devssh *nwssh.SSHBase
 	var err error
@@ -46,11 +45,11 @@ func run(host, port string, sshoptions nwssh.SSHOptions, args Args) (string, boo
 	defer devssh.Close()
 	if err != nil {
 		log.Printf("[%s]%v\n", host, err)
-		return "", false
+		return "", "", false
 	}
 	if err = devssh.Connect(); err != nil {
 		log.Printf("[%s]%v\n", host, err)
-		return "", false
+		return "", "", false
 	}
 
 	var device nwssh.SSHBASE
@@ -61,32 +60,20 @@ func run(host, port string, sshoptions nwssh.SSHOptions, args Args) (string, boo
 		log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
 	}
 
-	upgrade_cmd := `install activate patch flash:/` + args.patchname + ` all`
-	output := ""
-	o, err := device.ExecCommandExpect(upgrade_cmd, "[Y/N]", time.Second*5)
+	cmd := "display device"
+
+	output, err := device.ExecCommandExpectPrompt(cmd, time.Second*5)
 	if err != nil {
 		log.Printf("[%s]%v\n", host, err)
-		return output + o, false
+		return "", "", false
 	}
-	output += o
-	device.ExecCommandExpect("Y", "assword:", time.Second*5)
-	if err != nil {
-		log.Printf("[%s]%v\n", host, err)
-		return output + o, false
+
+	r := regexp.MustCompile(`Master\s{2,}\d\s{2,}(\S+\s?\S*)\s{2,}(\S+\s?\S*)\s+`)
+	matched := r.FindStringSubmatch(output)
+	if matched == nil {
+		return "", "", false
 	}
-	output += o
-	o, err = device.ExecCommandTiming("Y", time.Second*120)
-	if err != nil {
-		log.Printf("[%s]%v\n", host, err)
-		return output + o, false
-	}
-	o, err = device.ExecCommandTiming("install commit", time.Second*120)
-	if err != nil {
-		log.Printf("[%s]%v\n", host, err)
-		return output + o, false
-	}
-	output += o
-	return output, false
+	return matched[1], matched[2], true
 }
 
 func readlines(filename string) ([]string, error) {
@@ -112,8 +99,16 @@ func writefile(file, conntent string) error {
 }
 
 func main() {
-
 	initflag()
+	if args.username == "" {
+		fmt.Println("Username is expected but got none. See help docs.")
+		os.Exit(0)
+	}
+
+	if args.password == "" {
+		fmt.Printf("Please input the password:")
+		fmt.Scanf("%s", &args.password)
+	}
 
 	sshoptions := nwssh.SSHOptions{
 		IgnorHostKey: true,
@@ -143,16 +138,11 @@ func main() {
 		wait.Add(1)
 		go func(host string) {
 			threadchan <- struct{}{}
-			output, _ := run(host, "22", sshoptions, args)
-			if args.logdir != "" {
-				writefile(args.logdir+host, output)
-			} else {
-				fmt.Printf("--------%s-------\n%s\n", host, output)
-			}
+			ver, patch, _ := run(host, "22", sshoptions, args)
+			fmt.Printf("%s\t%s\t%s\n", host, ver, patch)
 			<-threadchan
 			wait.Done()
 		}(host)
 	}
 	wait.Wait()
-
 }
