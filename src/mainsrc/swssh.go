@@ -41,11 +41,10 @@ type Args struct {
 var args = Args{}
 
 func initflag() {
-	flag.StringVar(&args.hostfile, "f", "", `Target hosts list file, one ip on a separate line, for example:
+	flag.StringVar(&args.hostfile, "f", "", `Read list of targets from a file, for example:
 '10.10.10.10'
 '12.12.12.12'.`)
-	flag.StringVar(&args.host, "host", "", `Target host, ip address is expect. Multiple hosts are supported 
-when used ';' as dilimiter.`)
+	flag.StringVar(&args.host, "host", "", `Single target address or multiple target separated by ';'.`)
 	flag.StringVar(&args.cmdprefix, "cmd_prefix", "", `A prefix of command list file. 
 For example:
 	test.cmd.cisco
@@ -60,26 +59,26 @@ supported when used ';' as dilimiter.`)
 automatically.`)
 	flag.StringVar(&args.username, "u", "", "Username for login.")
 	flag.StringVar(&args.password, "p", "", "Password for login.")
-	flag.StringVar(&args.port, "port", "22", "Target SSH port to connect.")
-	flag.BoolVar(&args.saveconfig, "save", false, "Automatically save running-config after finished execution.")
-	flag.BoolVar(&args.strictmode, "strict", false, `Execute command using strict mode, host's prompt is expected to 
-confirm command was successfully executed until timeout reached.
+	flag.StringVar(&args.port, "port", "22", "Port to connect to on the remote host.")
+	flag.BoolVar(&args.saveconfig, "save", false, "Automatically save running-config after execution completed.")
+	flag.BoolVar(&args.strictmode, "strict", false, `Use strict mode, when enabled, host prompt is expected to 
+confirm if command was successfully executed until timeout reached.
 This is not recommand when it's requried enter 'Y/N' to confirm 
 execution.`)
-	flag.IntVar(&args.timeout, "timeout", 10, "SSH connection timeout in seconds.")
-	flag.IntVar(&args.readwaittime, "readwaittime", 500, `The time to wait ssh channel return the respone, if time reached,
-end the wait. In Millisecond.`)
+	flag.IntVar(&args.timeout, "timeout", 10, "SSH connection timeout(in seconds).")
+	flag.IntVar(&args.readwaittime, "readwaittime", 500, `The time to wait ssh channel return the respone, if readwaittime reached,
+stop waiting, return received data. In Millisecond.`)
 	flag.StringVar(&args.logdir, "logpath", "", "Log command output to /<path>/<ip_addr> instead of stdout.")
-	flag.StringVar(&args.conffiledir, "confpath", "", `Configuration file path, filename will be used as target hostname.`)
-	flag.StringVar(&args.cmdfile, "cmdfile", "", `The file includes commands.`)
+	flag.StringVar(&args.conffiledir, "confpath", "", `Configuration file path, the filename will be used as target hostname.`)
+	flag.StringVar(&args.cmdfile, "cmdfile", "", `Read commands for a file, one command per line.`)
 	flag.StringVar(&args.transcation, "tran", "", `Run a defined transcation such as get 'ifconifg', 'bgpneighbors'.`)
-	flag.StringVar(&args.privatekey, "pkey", "", `Private key used for login, if spicified, it'll ignore password.`)
-	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `The wait time for executing commands remotely, if timeout reached, 
+	flag.StringVar(&args.privatekey, "pkey", "", `Private key used for login, if spicified, password will be ignored.`)
+	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `The time of waiting for the command to finish executing, if timeout reached, 
 means execution is failed.`)
-	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, `The interval of sending command to remotely host.`)
-	flag.BoolVar(&args.prettyoutput, "pretty", false, `Strip the command line and device prompt of the respone output.`)
+	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, `The interval of sending command to remote host.`)
+	flag.BoolVar(&args.prettyoutput, "pretty", false, `Strip the command line and device prompt from the respone string.`)
 	flag.BoolVar(&args.help, "help", false, `Usage of CLI.`)
-	flag.BoolVar(&args.nopage, "nopage", true, `Disable enter "SPACE" to show more output line.`)
+	flag.BoolVar(&args.nopage, "nopage", true, `Disable enter "SPACE" to show more output lines.`)
 
 	flag.Parse()
 }
