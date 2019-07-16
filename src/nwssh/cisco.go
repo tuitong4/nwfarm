@@ -1,8 +1,8 @@
 package nwssh
 
 import (
-	"time"
 	"errors"
+	"time"
 )
 
 type NexusSSH struct {
@@ -42,9 +42,8 @@ func (s *NexusSSH) InterfaceConfig() (string, error) {
 	return resp, err
 }
 
-
-func (s *NexusSSH) RunTranscation(trans string) (string, error){
-	if trans == "ifconfig"{
+func (s *NexusSSH) RunTranscation(trans string) (string, error) {
+	if trans == "ifconfig" {
 		return s.InterfaceConfig()
 	}
 
@@ -92,9 +91,8 @@ func (s *CiscoSSH) InterfaceConfig() (string, error) {
 	return resp, err
 }
 
-
-func (s *CiscoSSH) RunTranscation(trans string) (string, error){
-	if trans == "ifconfig"{
+func (s *CiscoSSH) RunTranscation(trans string) (string, error) {
+	if trans == "ifconfig" {
 		return s.InterfaceConfig()
 	}
 
