@@ -44,7 +44,7 @@ func initflag() {
 	flag.StringVar(&args.hostfile, "f", "", `Read list of targets from a file, for example:
 '10.10.10.10'
 '12.12.12.12'.`)
-	flag.StringVar(&args.host, "host", "", `Single target address or multiple target separated by ';'.`)
+	flag.StringVar(&args.host, "host", "", `Single target address or multiple targets separated by ';'.`)
 	flag.StringVar(&args.cmdprefix, "cmd_prefix", "", `A prefix of command list file. 
 For example:
 	test.cmd.cisco
@@ -53,8 +53,8 @@ For example:
 	test.cmd.huawei
 	test.cmd.ruijie 
 'test' is the prefix.`)
-	flag.StringVar(&args.cmd, "cmd", "", `The command(s) to be executed remotely. Multiple commands are 
-supported when used ';' as dilimiter.`)
+	flag.StringVar(&args.cmd, "cmd", "", `Command to be executed remotely. Multiple commands are 
+separated by ';'.`)
 	flag.StringVar(&args.swvendor, "V", "", `Vendor of target host, if not spicified, it will be detected 
 automatically.`)
 	flag.StringVar(&args.username, "u", "", "Username for login.")
@@ -66,15 +66,15 @@ confirm if command was successfully executed until timeout reached.
 This is not recommand when it's requried enter 'Y/N' to confirm 
 execution.`)
 	flag.IntVar(&args.timeout, "timeout", 10, "SSH connection timeout(in seconds).")
-	flag.IntVar(&args.readwaittime, "readwaittime", 500, `The time to wait ssh channel return the respone, if readwaittime reached,
-stop waiting, return received data. In Millisecond.`)
+	flag.IntVar(&args.readwaittime, "readwaittime", 500, `The time to wait ssh channel return the respone, if readwaittime 
+reached, stop waiting, return received data. In Millisecond.`)
 	flag.StringVar(&args.logdir, "logpath", "", "Log command output to /<path>/<ip_addr> instead of stdout.")
 	flag.StringVar(&args.conffiledir, "confpath", "", `Configuration file path, the filename will be used as target hostname.`)
 	flag.StringVar(&args.cmdfile, "cmdfile", "", `Read commands for a file, one command per line.`)
 	flag.StringVar(&args.transcation, "tran", "", `Run a defined transcation such as get 'ifconifg', 'bgpneighbors'.`)
 	flag.StringVar(&args.privatekey, "pkey", "", `Private key used for login, if spicified, password will be ignored.`)
-	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `The time of waiting for the command to finish executing, if timeout reached, 
-means execution is failed.`)
+	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `The time of waiting for the command to finish executing, if timeout 
+reached, means execution is failed.`)
 	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, `The interval of sending command to remote host.`)
 	flag.BoolVar(&args.prettyoutput, "pretty", false, `Strip command line and device prompt from the respone string.`)
 	flag.BoolVar(&args.help, "help", false, `Usage of CLI.`)
