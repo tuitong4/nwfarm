@@ -55,7 +55,7 @@ For example:
 'test' is the prefix.`)
 	flag.StringVar(&args.cmd, "cmd", "", `The command(s) to be executed remotely. Multiple commands are 
 supported when used ';' as dilimiter.`)
-	flag.StringVar(&args.swvendor, "V", "", `Vendor of target host, if not spicified, it will be checked 
+	flag.StringVar(&args.swvendor, "V", "", `Vendor of target host, if not spicified, it will be detected 
 automatically.`)
 	flag.StringVar(&args.username, "u", "", "Username for login.")
 	flag.StringVar(&args.password, "p", "", "Password for login.")
@@ -76,7 +76,7 @@ stop waiting, return received data. In Millisecond.`)
 	flag.IntVar(&args.cmdtimeout, "cmdtimeout", 10, `The time of waiting for the command to finish executing, if timeout reached, 
 means execution is failed.`)
 	flag.IntVar(&args.cmdinterval, "cmdinterval", 2, `The interval of sending command to remote host.`)
-	flag.BoolVar(&args.prettyoutput, "pretty", false, `Strip the command line and device prompt from the respone string.`)
+	flag.BoolVar(&args.prettyoutput, "pretty", false, `Strip command line and device prompt from the respone string.`)
 	flag.BoolVar(&args.help, "help", false, `Usage of CLI.`)
 	flag.BoolVar(&args.nopage, "nopage", true, `Disable enter "SPACE" to show more output lines.`)
 
@@ -219,7 +219,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	if vendor == "" {
 		vendor = guessVendor(devssh, banner)
 		if vendor == "" {
-			log.Printf("[%s]Failed parse device's vendor automatically.\n", host)
+			log.Printf("[%s]Failed to parse device's vendor automatically.\n", host)
 			return
 		}
 	}
@@ -245,7 +245,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	var mutex sync.Mutex
 	if args.strictmode && len(cmds) > 0 {
 		if args.nopage && !device.SessionPreparation() {
-			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
+			log.Printf("[%s]Failed to init execute envirment. Try to exectue command directly.", host)
 		}
 		for _, cmd := range cmds {
 			o, err := device.ExecCommandExpectPrompt(cmd, time.Second*time.Duration(args.cmdtimeout))
@@ -254,7 +254,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 			}
 			output += o
 			if err != nil {
-				log.Printf("[%s]Failed exec cmd '%s'. Error: %v", host, cmd, err)
+				log.Printf("[%s]Failed to exec cmd '%s'. Error: %v.\n", host, cmd, err)
 				log.Printf("[%s]Exit execution!\n", host)
 				break
 			}
@@ -263,7 +263,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 
 	if !args.strictmode && len(cmds) > 0 {
 		if args.nopage && !device.SessionPreparation() {
-			log.Printf("[%s]Failed init execute envirment. Try to exectue command directly.", host)
+			log.Printf("[%s]Failed to init execute envirment. Try to exectue command directly.\n", host)
 		}
 		for _, cmd := range cmds {
 			o, err := device.ExecCommand(cmd)
@@ -272,7 +272,7 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 			}
 			output += o
 			if err != nil {
-				log.Printf("[%s]Failed exec cmd '%s'. Error: %v", host, cmd, err)
+				log.Printf("[%s]Failed to exec cmd '%s'. Error: %v\n", host, cmd, err)
 				log.Printf("[%s]Exit execution!\n", host)
 				break
 			}
@@ -282,17 +282,17 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 
 	if args.transcation != "" {
 		if args.nopage && !device.SessionPreparation() {
-			log.Printf("[%s]Failed init executable envirment. Try to exectue commands directly.", host)
+			log.Printf("[%s]Failed to init executable envirment. Try to exectue commands directly.\n", host)
 		}
 		output, err = device.RunTranscation(args.transcation)
 		if err != nil {
-			log.Printf("[%s]Failed exec transcation '%s'. Error: %v", host, args.transcation, err)
+			log.Printf("[%s]Failed exec transcation '%s'. Error: %v\n", host, args.transcation, err)
 		}
 	}
 
 	if args.saveconfig {
 		if !device.SaveRuningConfig() {
-			log.Printf("[%s]Failed save configuration.", host)
+			log.Printf("[%s]Failed save configuration.\n", host)
 		}
 	}
 
@@ -304,23 +304,25 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		mutex.Unlock()
 	}
 
-	log.Printf("[%s]Finished execution!\n", host)
+	log.Printf("[%s]Execution completed!\n", host)
 }
 
 func main() {
 	initflag()
 	if args.help {
-		fmt.Println("Usage of CLI:")
+		fmt.Println("Usage of CLI: swssh [args]")
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
 	if args.host == "" && args.hostfile == "" && args.conffiledir == "" {
 		fmt.Println("Traget host is expected but got none. See help docs.")
+		flag.PrintDefaults()
 		os.Exit(0)
 	}
 
 	if args.username == "" {
 		fmt.Println("Username is expected but got none. See help docs.")
+		flag.PrintDefaults()
 		os.Exit(0)
 	}
 

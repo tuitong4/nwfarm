@@ -17,6 +17,9 @@ Usage of swssh:
                 test.cmd.huawei
                 test.cmd.ruijie
 
+  -cmdfile string
+        配置命令行文件，不需要-cmd参数指定执行的命令。
+
   -cmdinterval int
         执行命令的间隔时间，当且仅当在不检查命令是否成功执行的时候使用，即不使用-strict模式。默认2s。
 
@@ -91,5 +94,7 @@ swssh -u username -p password -host 172.28.6.1 -cmd "display clock;display versi
 
 swssh -u username -p password -f ./deviceip -cmd "dis version"
 
-swssh -u username -p password -confpath ./cmdfile/ -logpath /var/log/swlog/
+swssh -u username -p password -confpath ./cmdfilepath/ -logpath /var/log/swlog/
+
+swssh -u username -p password -cmdfile ./commandsfile -logpath /var/log/swlog/
 
