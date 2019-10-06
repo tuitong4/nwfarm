@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/csv"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -31,6 +32,7 @@ type Args struct {
 	logdir       string
 	conffiledir  string
 	cmdfile      string
+	csvfile      string
 	transcation  string
 	privatekey   string
 	prettyoutput bool
@@ -79,12 +81,16 @@ reached, means execution is failed.`)
 	flag.BoolVar(&args.prettyoutput, "pretty", false, `Strip command line and device prompt from the respone string.`)
 	flag.BoolVar(&args.help, "help", false, `Usage of CLI.`)
 	flag.BoolVar(&args.nopage, "nopage", true, `Disable enter "SPACE" to show more output lines.`)
+	flag.StringVar(&args.csvfile, "csvfile", "", `Read targets from a csv file. Each record consists of host, vendor, 
+username, password separated by comma. It's recommanded to use 'cmd_prefix'
+to specify executable commands. Note that csv file has no title line.`)
 
 	flag.Parse()
 }
 
 func readlines(filename string) ([]string, error) {
 	file, err := os.Open(filename)
+	defer file.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -99,6 +105,29 @@ func readlines(filename string) ([]string, error) {
 	}
 
 	return lines, nil
+}
+
+func readcsv(filename string) ([][]string, error) {
+	file, err := os.Open(filename)
+	defer file.Close()
+	if err != nil {
+		return nil, err
+	}
+	reader := csv.NewReader(file)
+	var records [][]string
+	for {
+		record, err := reader.Read()
+		if err != nil {
+			break
+		}
+		var _records []string
+		for _, _item := range record {
+			_records = append(_records, strings.TrimSpace(_item))
+		}
+		records = append(records, _records)
+	}
+
+	return records, nil
 }
 
 var BannerVendorKeys map[string]string = map[string]string{
@@ -307,6 +336,76 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 	log.Printf("[%s]Execution completed!\n", host)
 }
 
+func csvModeRunning(args *Args) {
+
+	var cmds []string
+	var err error
+	basiscmd := make(map[string][]string)
+
+	maxThread := 500
+	threadchan := make(chan struct{}, maxThread)
+	wait := sync.WaitGroup{}
+
+	if args.cmd != "" {
+		cmds = strings.Split(args.cmd, ";")
+	} else if args.cmdprefix != "" {
+		basiscmd = map[string][]string{
+			"H3C":    nil,
+			"HUAWEI": nil,
+			"NEXUS":  nil,
+			"CISCO":  nil,
+			"RUIJIE": nil,
+		}
+		for k, _ := range basiscmd {
+			cmds_t, err := readlines(args.cmdprefix + ".cmd." + strings.ToLower(k))
+			if err == nil {
+				basiscmd[k] = cmds_t
+			}
+		}
+	} else if args.cmdfile != "" {
+		cmds, err = readlines(args.cmdfile)
+		if err != nil {
+			log.Printf("%v\n", err)
+			os.Exit(0)
+		}
+	}
+
+	sshoptions := nwssh.SSHOptions{
+		PrivateKeyFile: args.privatekey,
+		IgnorHostKey:   true,
+		BannerCallback: func(msg string) error {
+			return nil
+		},
+		TermType:     "vt100",
+		TermHeight:   560,
+		TermWidht:    480,
+		ReadWaitTime: time.Duration(args.readwaittime) * time.Millisecond, //Read data from a ssh channel timeout
+	}
+
+	records, err := readcsv(args.csvfile)
+	if err != nil {
+		fmt.Println("Fialed to read host infomation from csv file.")
+	}
+
+	for _, record := range records {
+		_args := args
+		_args.host = record[0]
+		_args.swvendor = record[1]
+		_args.username = record[2]
+		_args.password = record[3]
+
+		wait.Add(1)
+		go func(host string) {
+			threadchan <- struct{}{}
+			run(host, args.port, sshoptions, cmds, _args, basiscmd)
+			<-threadchan
+			wait.Done()
+		}(_args.host)
+
+	}
+	wait.Wait()
+}
+
 func main() {
 	initflag()
 	if args.help {
@@ -314,6 +413,12 @@ func main() {
 		flag.PrintDefaults()
 		os.Exit(0)
 	}
+
+	if args.csvfile != "" {
+		csvModeRunning(&args)
+		os.Exit(1)
+	}
+
 	if args.host == "" && args.hostfile == "" && args.conffiledir == "" {
 		fmt.Println("Traget host is expected but got none. See help docs.")
 		flag.PrintDefaults()
