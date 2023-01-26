@@ -5,7 +5,6 @@ import (
 	"encoding/csv"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"nwssh"
 	"os"
@@ -15,29 +14,32 @@ import (
 )
 
 type Args struct {
-	hostfile     string
-	host         string
-	cmd          string
-	cmdprefix    string
-	swvendor     string
-	username     string
-	password     string
-	port         string
-	saveconfig   bool
-	strictmode   bool
-	timeout      int
-	readwaittime int
-	cmdtimeout   int
-	cmdinterval  int
-	logdir       string
-	conffiledir  string
-	cmdfile      string
-	csvfile      string
-	transcation  string
-	privatekey   string
-	prettyoutput bool
-	help         bool
-	nopage       bool
+	hostfile       string
+	host           string
+	cmd            string
+	cmdprefix      string
+	swvendor       string
+	username       string
+	password       string
+	port           string
+	saveconfig     bool
+	strictmode     bool
+	timeout        int
+	readwaittime   int
+	cmdtimeout     int
+	cmdinterval    int
+	repeatinterval int
+	repeatduration int
+	logdir         string
+	conffiledir    string
+	cmdfile        string
+	csvfile        string
+	transcation    string
+	privatekey     string
+	prettyoutput   bool
+	help           bool
+	nopage         bool
+	repeat         bool
 }
 
 var args = Args{}
@@ -84,7 +86,12 @@ reached, means execution is failed.`)
 	flag.StringVar(&args.csvfile, "csvfile", "", `Read targets from a csv file. Each record consists of host, vendor, 
 username, password separated by comma. It's recommanded to use 'cmd_prefix'
 to specify executable commands. Note that csv file has no title line.`)
-
+	flag.BoolVar(&args.repeat, "repeat", false, `Execute the commands repeatedly at the given 'repeatinterval',
+it will end when the duration reached at 'repeatduration'.`)
+	flag.IntVar(&args.repeatinterval, "repeatinterval", 60, `Interval between commands executions(in seconds), 
+it's different to the 'cmdinterval'.`)
+	flag.IntVar(&args.repeatduration, "repeatduration", 0, `Duration of the repeatedly executions(in seconds), 
+0 means permanently. (default 0)`)
 	flag.Parse()
 }
 
@@ -217,6 +224,7 @@ func guessVendor(s *nwssh.SSHBase, banner string) string {
 	}
 	return vendor
 }
+
 func pathIsExist(path string) bool {
 	_, err := os.Stat(path)
 	if err != nil {
@@ -252,7 +260,7 @@ func createPath(path string) error {
 }
 
 func writefile(file, conntent string) error {
-	return ioutil.WriteFile(file, []byte(conntent), 0666)
+	return os.WriteFile(file, []byte(conntent), 0666)
 }
 
 func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Args, basiscmd map[string][]string) {
@@ -364,6 +372,137 @@ func run(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Ar
 		mutex.Lock()
 		os.Stdout.Write([]byte(output + "\n"))
 		mutex.Unlock()
+	}
+
+	log.Printf("[%s]Execution completed!\n", host)
+}
+
+func runRepeatedly(host, port string, sshoptions nwssh.SSHOptions, cmds []string, args *Args, basiscmd map[string][]string) {
+	var banner string
+	var devssh *nwssh.SSHBase
+	var err error
+	vendor := strings.ToUpper(args.swvendor)
+	if vendor == "" {
+		sshoptions.BannerCallback = func(message string) error {
+			banner = message
+			return nil
+		}
+	}
+
+	devssh, err = nwssh.SSH(host, port, args.username, args.password, time.Duration(args.timeout)*time.Second, sshoptions)
+	defer devssh.Close()
+	if err != nil {
+		log.Printf("[%s]%v\n", host, err)
+		return
+	}
+	if err = devssh.Connect(); err != nil {
+		log.Printf("[%s]%v\n", host, err)
+		return
+	}
+
+	if vendor == "" {
+		vendor = guessVendor(devssh, banner)
+		if vendor == "" {
+			log.Printf("[%s]Failed to parse device's vendor automatically.\n", host)
+			return
+		}
+	}
+
+	var device nwssh.SSHBASE
+	if vendor == "H3C" {
+		device = &nwssh.H3cSSH{devssh}
+	} else if vendor == "HUAWEI" {
+		device = &nwssh.HuaweiSSH{devssh}
+	} else if vendor == "NEXUS" {
+		device = &nwssh.NexusSSH{devssh}
+	} else if vendor == "CISCO" {
+		device = &nwssh.CiscoSSH{devssh}
+	} else if vendor == "RUIJIE" {
+		device = &nwssh.RuijieSSH{devssh}
+	}
+
+	if len(cmds) == 0 {
+		cmds = basiscmd[vendor]
+	}
+
+	var output string
+	var mutex sync.Mutex
+	var outputFile *os.File
+	var startTime time.Time
+
+	duration := time.Duration(args.repeatduration) * time.Second
+
+	if args.logdir != "" {
+		outputFile, err = os.OpenFile(args.logdir+host, os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Printf("[%s]Failed to create the output file '%s', task stopped.", host, args.logdir+host)
+			return
+		}
+		defer outputFile.Close()
+	}
+
+	if args.nopage && !device.SessionPreparation() {
+		log.Printf("[%s]Failed to init executable envirment. Try to execute commands directly.\n", host)
+	}
+
+	startTime = time.Now()
+REPEAT:
+	if args.strictmode && len(cmds) > 0 {
+		for _, cmd := range cmds {
+			o, err := device.ExecCommandExpectPrompt(cmd, time.Second*time.Duration(args.cmdtimeout))
+			if args.prettyoutput == true {
+				o = nwssh.SanitizeRespone(o, true, true)
+			}
+			output += o
+			if err != nil {
+				log.Printf("[%s]Failed to exec cmd '%s'. Error: %v.\n", host, cmd, err)
+				log.Printf("[%s]Exit execution!\n", host)
+				break
+			}
+		}
+	}
+
+	if !args.strictmode && len(cmds) > 0 {
+		for _, cmd := range cmds {
+			o, err := device.ExecCommand(cmd)
+			if args.prettyoutput {
+				o = nwssh.SanitizeRespone(o, true, true)
+			}
+			output += o
+			if err != nil {
+				log.Printf("[%s]Failed to exec cmd '%s'. Error: %v\n", host, cmd, err)
+				log.Printf("[%s]Exit execution!\n", host)
+				break
+			}
+			time.Sleep(time.Second * time.Duration(args.cmdinterval))
+		}
+	}
+
+	if args.transcation != "" {
+		output, err = device.RunTranscation(args.transcation)
+		if err != nil {
+			log.Printf("[%s]Failed exec transcation '%s'. Error: %v\n", host, args.transcation, err)
+		}
+	}
+
+	if args.saveconfig {
+		if !device.SaveRuningConfig() {
+			log.Printf("[%s]Failed save configuration.\n", host)
+		}
+	}
+
+	if args.logdir != "" {
+		outputFile.Write([]byte(output))
+
+	} else {
+		mutex.Lock()
+		os.Stdout.Write([]byte(output + "\n"))
+		mutex.Unlock()
+	}
+
+	if args.repeatduration == 0 || time.Now().Sub(startTime) < duration {
+		output = ""
+		goto REPEAT
 	}
 
 	log.Printf("[%s]Execution completed!\n", host)
@@ -494,13 +633,14 @@ func main() {
 	}
 
 	var cmds []string
+
 	basiscmd := make(map[string][]string)
 
 	maxThread := 500
 	threadchan := make(chan struct{}, maxThread)
 	wait := sync.WaitGroup{}
 	if args.conffiledir != "" {
-		fileinfo, err := ioutil.ReadDir(args.conffiledir)
+		fileinfo, err := os.ReadDir(args.conffiledir)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(0)
