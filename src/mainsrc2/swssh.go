@@ -502,6 +502,7 @@ REPEAT:
 
 	if args.repeatduration == 0 || time.Now().Sub(startTime) < duration {
 		output = ""
+		time.Sleep(time.Duration(args.repeatinterval) * time.Second)
 		goto REPEAT
 	}
 
@@ -569,7 +570,11 @@ func csvModeRunning(args *Args) {
 		wait.Add(1)
 		go func(host string) {
 			threadchan <- struct{}{}
-			run(host, args.port, sshoptions, cmds, _args, basiscmd)
+			if args.repeat {
+				runRepeatedly(host, args.port, sshoptions, cmds, _args, basiscmd)
+			} else {
+				run(host, args.port, sshoptions, cmds, _args, basiscmd)
+			}
 			<-threadchan
 			wait.Done()
 		}(_args.host)
@@ -656,7 +661,12 @@ func main() {
 				wait.Add(1)
 				go func(host string, cmds []string) {
 					threadchan <- struct{}{}
-					run(host, args.port, sshoptions, cmds, &args, basiscmd)
+					if args.repeat {
+						runRepeatedly(host, args.port, sshoptions, cmds, &args, basiscmd)
+					} else {
+						run(host, args.port, sshoptions, cmds, &args, basiscmd)
+					}
+
 					<-threadchan
 					wait.Done()
 				}(host, cmds)
