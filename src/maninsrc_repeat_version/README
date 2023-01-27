@@ -66,11 +66,11 @@ Usage of swssh:
         循环执行命令, 命令执行间隔为'repeatinterval', 直到循环时间触及'repeatduration'为止。
 
   -repeatduration int
-        循环执行命令时常，移秒为单位, 当为0的时候意味着永久执行。 (default 0)
+        循环执行命令时常，移秒为单位, 当为0的时候意味着永久执行，不自动停止。 (default 0)
 
   -repeatinterval int
         循环执行命令时间的间隔，以秒为单位。注意该间隔和'cmdinterval'不一样。假设要执行的命令时多条，
-        只有这些命令以'cmdinterval'间隔实行完后(在strict模式下将等待命令完全执行完毕后)，在等待'repeatinterval'时长后再进行下一轮
+        只有这些命令以'cmdinterval'间隔执行完后(在strict模式下将等待命令完全执行完毕后)，在等待'repeatinterval'时长后再进行下一轮
         的任务。(default 60)
 
   -save bool
