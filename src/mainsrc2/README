@@ -62,6 +62,17 @@ Usage of swssh:
         命令发送后会一般会持续返回数据，如果一段时间内没有数据返回，认为是命令执行结束。只有在非-strict模式
         下生效。对于有些命令可能执行时间比较久，可以设置时间相对较长。单位为ms，默认500ms。
 
+  -repeat
+        循环执行命令, 命令执行间隔为'repeatinterval', 直到循环时间触及'repeatduration'为止。
+
+  -repeatduration int
+        循环执行命令时常，移秒为单位, 当为0的时候意味着永久执行。 (default 0)
+
+  -repeatinterval int
+        循环执行命令时间的间隔，以秒为单位。注意该间隔和'cmdinterval'不一样。假设要执行的命令时多条，
+        只有这些命令以'cmdinterval'间隔实行完后(在strict模式下将等待命令完全执行完毕后)，在等待'repeatinterval'时长后再进行下一轮
+        的任务。(default 60)
+
   -save bool
         自动保存配置。在完成命令后生效。优先使用此方式保存配置，不建议单独执行保存命令。保存命令等待时间较长，容易执行失败。
 
@@ -98,3 +109,4 @@ swssh -u username -p password -confpath ./cmdfilepath/ -logpath /var/log/swlog/
 
 swssh -u username -p password -cmdfile ./commandsfile -logpath /var/log/swlog/
 
+swssh -u username -p password -host 172.28.6.1 -cmd "display clock;display version" -repeat -repeatinterval 60 -repeatduration 1200 -logpath /var/log/swlog/

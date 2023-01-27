@@ -713,7 +713,11 @@ func main() {
 		wait.Add(1)
 		go func(host string) {
 			threadchan <- struct{}{}
-			run(host, args.port, sshoptions, cmds, &args, basiscmd)
+			if args.repeat {
+				runRepeatedly(host, args.port, sshoptions, cmds, &args, basiscmd)
+			} else {
+				run(host, args.port, sshoptions, cmds, &args, basiscmd)
+			}
 			<-threadchan
 			wait.Done()
 		}(host)
