@@ -1,4 +1,4 @@
-Simple Switch CLI Execution Script.
+Simple Switch CLI Execution Script. (golang version >= 1.19 is required)
 
 Usage of swssh:
   -V string
